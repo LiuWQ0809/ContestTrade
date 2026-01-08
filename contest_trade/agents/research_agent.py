@@ -21,7 +21,7 @@ from utils.llm_utils import count_tokens
 from agents.prompts import prompt_for_research_plan, prompt_for_research_choose_tool, prompt_for_research_write_result, prompt_for_research_invest_task, prompt_for_research_invest_output_format
 from models.llm_model import GLOBAL_LLM, GLOBAL_THINKING_LLM
 from tools.tool_utils import ToolManager, ToolManagerConfig
-from config.config import cfg, PROJECT_ROOT
+from config.config import cfg, PROJECT_ROOT, WORKSPACE_ROOT
 from langchain_core.runnables import RunnableConfig
 from utils.market_manager import GLOBAL_MARKET_MANAGER
 
@@ -105,15 +105,12 @@ class ResearchAgentState(TypedDict):
 class ResearchAgent:
     """基于LangGraph的投资决策Agent"""
     
-    def __init__(self, config: ResearchAgentConfig):
-        self.config = config
+    def __init__(self, config: ResearchAgentConfig = None):
+        self.config = config or ResearchAgentConfig()
         self.tool_manager = ToolManager(self.config.tool_config)
         self.app = self._build_graph()
-        self.plan = self.config.plan
-        self.react = self.config.react
-
-
-        self.signal_dir = PROJECT_ROOT / "agents_workspace" / "reports" / self.config.agent_name
+        
+        self.signal_dir = WORKSPACE_ROOT / "agents_workspace" / "reports" / self.config.agent_name
         if not self.signal_dir.exists():
             self.signal_dir.mkdir(parents=True, exist_ok=True)
 
@@ -188,7 +185,7 @@ class ResearchAgent:
 
     async def _need_plan(self, state: ResearchAgentState) -> str:
         """判断是否需要规划"""
-        if self.plan:
+        if self.config.plan:
             return "yes"
         else:
             return "no"
@@ -196,7 +193,7 @@ class ResearchAgent:
     async def _plan(self, state: ResearchAgentState) -> ResearchAgentState:
         """规划任务"""
         try:
-            if not self.plan:
+            if not self.config.plan:
                 state["plan_result"] = ""
                 return state
             prompt = prompt_for_research_plan.format(
@@ -217,7 +214,7 @@ class ResearchAgent:
 
     async def _tool_selection(self, state: ResearchAgentState) -> ResearchAgentState:
         """选择工具"""
-        if not self.react:
+        if not self.config.react:
             state["selected_tool"] = {"tool_name": "final_report"}
             return state
 

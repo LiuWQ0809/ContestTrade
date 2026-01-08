@@ -6,7 +6,7 @@ import hashlib
 from pathlib import Path
 from pydantic import BaseModel, Field
 from utils.akshare_utils import akshare_cached
-from models.llm_model import GLOBAL_VISION_LLM
+from models.llm_model import GLOBAL_VISION_LLM, GLOBAL_LLM
 from tools.tool_utils import smart_tool
 from tools.search_web import search_web
 import pandas as pd
@@ -192,7 +192,11 @@ async def call_llm_for_comprehensive_analysis(prompt, intraday_chart_base64=None
         content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{kline_chart_base64}"}})
     
     messages = [{"role": "user", "content": content}]
-    response = await GLOBAL_VISION_LLM.a_run(messages, temperature=0.3, max_tokens=4000, verbose=False, thinking=False)
+    
+    # Fallback to GLOBAL_LLM if GLOBAL_VISION_LLM is not available
+    llm = GLOBAL_VISION_LLM if GLOBAL_VISION_LLM else GLOBAL_LLM
+    
+    response = await llm.a_run(messages, temperature=0.3, max_tokens=4000, verbose=False, thinking=False)
     return response.content
 
 

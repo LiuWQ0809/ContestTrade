@@ -21,7 +21,7 @@ from loguru import logger
 
 
 class SinaNewsCrawl(DataSourceBase):
-    def __init__(self, start_page=1, end_page=50):
+    def __init__(self, start_page=1, end_page=5):
         super().__init__("sina_news_crawl")
         self.start_page = start_page
         self.end_page = end_page

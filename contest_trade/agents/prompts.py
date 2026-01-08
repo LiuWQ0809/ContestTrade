@@ -57,25 +57,8 @@ prompt_for_research_choose_tool = """
 {tool_call_context}
 </Current_Task_Context>
 
-Analyze the following steps and select tools:
-## Available Resources
-You currently have access to the following analysis tools:
-- **Financial Data Tools**: Get company financials, market data, and historical information
-- **News & Information Tools**: Search for recent news, announcements, and market updates
-- **Research Tools**: Access analyst reports, industry data, and comparative analysis
-- **Web Search Tools**: Get real-time information from various sources
-
-## Development Needs Assessment
-If you encounter limitations in your analytical capabilities that prevent you from completing high-quality research, you can propose new tool development. Consider whether you need specialized tools for:
-- Advanced technical analysis and charting capabilities
-- Real-time sentiment analysis from social media platforms
-- Alternative data sources (satellite data, credit card spending, etc.)
-- Automated financial model building and scenario analysis
-- Industry-specific databases and metrics
-- Options flow and derivatives analysis tools
-- ESG and sustainability metrics analysis
-- Cryptocurrency and digital asset analysis
-- Or any other specialized analytical capability you deem essential
+Analyze the following steps and select tools.
+You have access to Financial Data Tools, News & Information Tools, Research Tools, and Web Search Tools.
 
 ## Output Format:
 You must and can only return a JSON object in the following format enclosed by <Output> and </Output> like:

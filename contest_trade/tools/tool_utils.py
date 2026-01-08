@@ -63,8 +63,9 @@ class ToolManager:
             module = importlib.import_module(module_name)
             func = getattr(module, func_name)
             
-            if not callable(func):
-                raise ValueError(f"{module_path} is not callable")
+            # Check if it is callable OR a LangChain tool (which might not return True for callable() in all environments)
+            if not (callable(func) or hasattr(func, "ainvoke") or hasattr(func, "run")):
+                raise ValueError(f"{module_path} is not callable and does not appear to be a tool")
             
             return self.register_function(func)
             

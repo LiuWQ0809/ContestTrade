@@ -19,7 +19,7 @@ from pathlib import Path
 from utils.llm_utils import count_tokens
 from models.llm_model import GLOBAL_LLM
 from langchain_core.runnables import RunnableConfig
-from config.config import PROJECT_ROOT, cfg
+from config.config import PROJECT_ROOT, WORKSPACE_ROOT, cfg
 from agents.prompts import prompt_for_data_analysis_summary_doc, prompt_for_data_analysis_filter_doc, prompt_for_data_analysis_merge_summary
 
 
@@ -116,7 +116,7 @@ class DataAnalysisAgent:
         self.config = config or DataAnalysisAgentConfig()
         self.app = self._build_graph()
 
-        self.factor_dir = PROJECT_ROOT / "agents_workspace" / "factors" / self.config.agent_name
+        self.factor_dir = WORKSPACE_ROOT / "agents_workspace" / "factors" / self.config.agent_name
         if not self.factor_dir.exists():
             self.factor_dir.mkdir(parents=True, exist_ok=True)
 

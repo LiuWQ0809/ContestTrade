@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
-sys.path.append(str(PROJECT_ROOT))
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
+sys.path.append(str(PROJECT_ROOT / "contest_trade"))
 
 from models.llm_model import GLOBAL_LLM
 from utils.market_manager import GLOBAL_MARKET_MANAGER
@@ -39,8 +39,8 @@ class ResearchContest:
         self.data_manager = ResearchDataManager(self.history_window_days, PROJECT_ROOT, target_agents)
         self.data_manager.set_market_manager(GLOBAL_MARKET_MANAGER)
         self.predictor = ResearchPredictor(self.history_window_days)
-        self.weight_optimizer = ResearchWeightOptimizer(".")
-        self.signal_judger = ResearchSignalJudger(str(PROJECT_ROOT / "contest_trade" / "agents_workspace"), self.history_window_days, self.data_manager)
+        self.weight_optimizer = ResearchWeightOptimizer(str(self.data_manager.workspace_dir))
+        self.signal_judger = ResearchSignalJudger(str(self.data_manager.workspace_dir), self.history_window_days, self.data_manager)
         
         logger.info(f"ResearchContest初始化完成 - 历史窗口: {self.history_window_days}天, 目标agents: {len(self.target_agents)}个")
     

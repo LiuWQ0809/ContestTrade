@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 # 添加项目根目录到path
-PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
-sys.path.append(str(PROJECT_ROOT))
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
+sys.path.append(str(PROJECT_ROOT / "contest_trade"))
 
 from models.llm_model import GLOBAL_LLM
 from utils.market_manager import GLOBAL_MARKET_MANAGER

@@ -79,8 +79,8 @@ class ContestTradeDisplay:
         self._last_console_size = None  # 用于检测控制台大小变化
         
         # 日志监控相关 - Import PROJECT_ROOT when needed
-        from contest_trade.config.config import PROJECT_ROOT
-        self.logs_dir = Path(PROJECT_ROOT) / "agents_workspace" / "logs"
+        from contest_trade.config.config import WORKSPACE_ROOT
+        self.logs_dir = Path(WORKSPACE_ROOT) / "agents_workspace" / "logs"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         
     def create_log_file(self, trigger_time: str):
@@ -93,14 +93,14 @@ class ContestTradeDisplay:
         
     def check_agent_status_from_events_and_files(self, trigger_time: str):
         """基于事件和文件系统更新agent状态"""
-        # Import PROJECT_ROOT when needed
-        from contest_trade.config.config import PROJECT_ROOT
+        # Import WORKSPACE_ROOT when needed
+        from contest_trade.config.config import WORKSPACE_ROOT
         
         # 格式化时间戳用于文件匹配
         timestamp_str = trigger_time.replace("-", "-").replace(":", "-").replace(" ", "_")
         
-        # 检查factors目录（Data Analysis Agent结果）
-        factors_dir = Path(PROJECT_ROOT) / "agents_workspace" / "factors"
+        # 检查factors目录
+        factors_dir = Path(WORKSPACE_ROOT) / "agents_workspace" / "factors"
         if factors_dir.exists():
             for agent_name in self.agent_status:
                 if not agent_name.startswith("agent_"):  # Data agents
@@ -114,7 +114,7 @@ class ContestTradeDisplay:
                             self.add_message(get_text("Data Analysis Agent", "Data Analysis Agent"), get_text(f"✅ {agent_name} 完成数据分析", f"✅ {agent_name} completed data analysis"))
         
         # 检查reports目录（Research Agent结果）
-        reports_dir = Path(PROJECT_ROOT) / "agents_workspace" / "reports"
+        reports_dir = Path(WORKSPACE_ROOT) / "agents_workspace" / "reports"
         if reports_dir.exists():
             for agent_name in self.agent_status:
                 if agent_name.startswith("agent_"):  # Research agents
@@ -439,8 +439,8 @@ def run_contest_analysis_interactive(trigger_time: str, market: str):
                 
                 # 自动生成MD报告
                 try:
-                    from contest_trade.config.config import PROJECT_ROOT
-                    results_dir = Path(PROJECT_ROOT) / "agents_workspace" / "results"
+                    from contest_trade.config.config import WORKSPACE_ROOT
+                    results_dir = Path(WORKSPACE_ROOT) / "agents_workspace" / "results"
                     from .static.report_template import generate_final_report, generate_data_report
                     
                     # 生成研究报告
@@ -762,7 +762,7 @@ def display_data_report(final_state: Dict):
 
 def load_factors_data(trigger_time: str) -> Dict:
     """加载factors文件夹中的数据"""
-    from contest_trade.config.config import PROJECT_ROOT
+    from contest_trade.config.config import WORKSPACE_ROOT
     
     factors_data = {
         'trigger_time': trigger_time,
@@ -776,7 +776,7 @@ def load_factors_data(trigger_time: str) -> Dict:
         return factors_data
     
     # 读取factors目录
-    factors_dir = Path(PROJECT_ROOT) / "agents_workspace" / "factors"
+    factors_dir = Path(WORKSPACE_ROOT) / "agents_workspace" / "factors"
     if not factors_dir.exists():
         return factors_data
     

@@ -19,7 +19,7 @@ class ResearchDataManager:
         self.history_window_days = history_window_days
         self.project_root = project_root
         self.target_agents = target_agents or []
-        self.workspace_dir = project_root / "contest_trade" / "agents_workspace"
+        self.workspace_dir = project_root / "agents_workspace"
         self.reports_dir = self.workspace_dir / "reports"
         self.factors_dir = self.workspace_dir / "factors"
         

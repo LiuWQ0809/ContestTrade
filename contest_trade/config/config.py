@@ -6,6 +6,7 @@ import yaml
 import os
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+WORKSPACE_ROOT = PROJECT_ROOT.parent.resolve()
 
 
 class ProjectConfig:
@@ -20,7 +21,7 @@ class ProjectConfig:
         else:
             config_filename = "config.yaml"
         
-        yaml_path = PROJECT_ROOT.parent / config_filename
+        yaml_path = WORKSPACE_ROOT / config_filename
         print(f"Loading config from: {yaml_path} (Market: {market_type})")
 
         with open(yaml_path, "r", encoding="utf-8") as fr:

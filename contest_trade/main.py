@@ -9,7 +9,7 @@ from typing import List, Dict, TypedDict
 from langgraph.graph import END, StateGraph
 from langchain_core.runnables import RunnableConfig
 from langchain_core.callbacks import dispatch_custom_event
-from config.config import cfg, PROJECT_ROOT
+from config.config import cfg, PROJECT_ROOT, WORKSPACE_ROOT
 from agents.data_analysis_agent import DataAnalysisAgent, DataAnalysisAgentConfig, DataAnalysisAgentInput
 from agents.research_agent import ResearchAgent, ResearchAgentConfig, ResearchAgentInput
 from utils.market_manager import GLOBAL_MARKET_MANAGER
@@ -25,7 +25,7 @@ class CompanyState(TypedDict):
 class SimpleTradeCompany:
     def __init__(self):
         # 设置工作目录
-        self.workspace_dir = str(PROJECT_ROOT / "agents_workspace")
+        self.workspace_dir = str(WORKSPACE_ROOT / "agents_workspace")
         
         # 初始化Data Agents
         self.data_agents = {}
