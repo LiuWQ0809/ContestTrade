@@ -10,6 +10,9 @@ import os
 import sys
 import httpx
 import asyncio
+from loguru import logger
+import hashlib
+import json
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, AsyncIterator, Callable, Any
@@ -18,6 +21,10 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 from config.config import cfg
+
+# LLM Persistent Cache Directory
+LLM_CACHE_DIR = PROJECT_ROOT.parent / "agents_workspace" / "cache" / "llm"
+LLM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 from models.base_agent_model import (
     BaseAgentModel,
@@ -381,6 +388,58 @@ class LLMModel(BaseAgentModel):
     for the actual implementation.
     """
     
+    # Simple in-memory cache to avoid duplicate calls in the same session
+    _cache = {}
+    _cache_lock = asyncio.Lock()
+
+    def _save_to_disk(self, cache_key: str, response: ModelResponse):
+        """Save response to persistent disk cache."""
+        try:
+            cache_file = LLM_CACHE_DIR / f"{cache_key}.json"
+            data = {
+                "content": response.content,
+                "reasoning_content": response.reasoning_content,
+                "model_name": response.model_name
+            }
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save cache to disk: {e}")
+
+    def _load_from_disk(self, cache_key: str) -> Optional[ModelResponse]:
+        """Load response from persistent disk cache."""
+        try:
+            cache_file = LLM_CACHE_DIR / f"{cache_key}.json"
+            if cache_file.exists():
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return ModelResponse(
+                    content=data["content"],
+                    reasoning_content=data.get("reasoning_content"),
+                    model_name=data["model_name"]
+                )
+        except Exception as e:
+            logger.warning(f"Failed to load cache from disk: {e}")
+        return None
+
+    def _get_cache_key(self, messages: List[Dict[str, str]], temperature: float, max_tokens: Optional[int], **kwargs) -> str:
+        """Generate a unique cache key for the request."""
+        try:
+            # Standardize the request parameters
+            cache_data = {
+                "model": self.model_name,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "extra": {k: v for k, v in kwargs.items() if isinstance(v, (str, int, float, bool, type(None)))}
+            }
+            # Use a stable hash
+            key_str = json.dumps(cache_data, sort_keys=True)
+            return hashlib.sha256(key_str.encode()).hexdigest()
+        except Exception:
+            # If serialization fails, return None to skip caching
+            return None
+
     def __init__(
         self,
         config: LLMModelConfig,
@@ -435,7 +494,7 @@ class LLMModel(BaseAgentModel):
                 )
                 return response
             except Exception as e:
-                print(f"Error: {e}")
+                logger.error(f"Error: {e}")
                 return None
 
 
@@ -449,6 +508,7 @@ class LLMModel(BaseAgentModel):
         retry_delay: Optional[float] = None,
         timeout: Optional[float] = None,
         post_process_func: Optional[Callable[[str], str]] = None,
+        use_cache: bool = True,
         **kwargs
     ) -> ModelResponse[str]:
         """
@@ -468,6 +528,27 @@ class LLMModel(BaseAgentModel):
         Returns:
             A ModelResponse containing the generated content
         """
+        # Check cache if enabled
+        cache_key = None
+        if use_cache:
+            cache_key = self._get_cache_key(messages, temperature, max_tokens, **kwargs)
+            if cache_key:
+                # 1. Check in-memory initialy
+                async with self._cache_lock:
+                    if cache_key in self._cache:
+                        if verbose:
+                            logger.debug(f"Using memory-cached response for model {self.model_name}")
+                        return self._cache[cache_key]
+                
+                # 2. Check disk if not in memory
+                disk_response = self._load_from_disk(cache_key)
+                if disk_response:
+                    if verbose:
+                        logger.debug(f"Using disk-cached response for model {self.model_name}")
+                    # Update memory cache
+                    async with self._cache_lock:
+                        self._cache[cache_key] = disk_response
+                    return disk_response
 
         if max_retries is None:
             max_retries = getattr(self, 'config', LLMModelConfig("", "", "")).max_retries
@@ -499,8 +580,6 @@ class LLMModel(BaseAgentModel):
                         full_content += chunk.content
                     if chunk.raw_chunk is not None:
                         raw_chunks.append(chunk.raw_chunk)
-                        if verbose:
-                            print(chunk.content, end="", flush=True)
             
                 if post_process_func is not None:
                     proc_response = post_process_func(full_content)
@@ -508,21 +587,29 @@ class LLMModel(BaseAgentModel):
                     proc_response = None
 
                 # Create a response with the collected content
-                return ModelResponse(
+                response = ModelResponse(
                     content=self.postprocess_response(full_content),
                     reasoning_content=reasoning_content,
                     model_name=self.model_name,
                     raw_response=raw_chunks if raw_chunks else None,
                     proc_response=proc_response
                 )
+
+                # Save to cache if enabled
+                if cache_key:
+                    async with self._cache_lock:
+                        self._cache[cache_key] = response
+                    self._save_to_disk(cache_key, response)
+                
+                return response
             except Exception as e:
                 if attempt < max_retries:
-                    print(f"🔄 LLM API调用失败 (尝试 {attempt + 1}/{max_retries + 1}): {type(e).__name__}: {e}")
-                    print(f"⏳ 等待 {retry_delay} 秒后重试...")
+                    logger.info(f"🔄 LLM API调用失败 (尝试 {attempt + 1}/{max_retries + 1}): {type(e).__name__}: {e}")
+                    logger.info(f"⏳ 等待 {retry_delay} 秒后重试...")
                     await asyncio.sleep(retry_delay)
                     continue
                 else:
-                    print(f"❌ LLM API调用最终失败，已重试 {max_retries} 次: {type(e).__name__}: {e}")
+                    logger.error(f"❌ LLM API调用最终失败，已重试 {max_retries} 次: {type(e).__name__}: {e}")
                     raise
     
 
@@ -589,12 +676,12 @@ class LLMModel(BaseAgentModel):
                     should_retry = True
                 
                 if should_retry and attempt < max_retries:
-                    print(f"🔄 LLM API调用失败 (尝试 {attempt + 1}/{max_retries + 1}): {type(e).__name__}: {e}")
-                    print(f"⏳ 等待 {retry_delay} 秒后重试...")
+                    logger.info(f"🔄 LLM API调用失败 (尝试 {attempt + 1}/{max_retries + 1}): {type(e).__name__}: {e}")
+                    logger.info(f"⏳ 等待 {retry_delay} 秒后重试...")
                     await asyncio.sleep(retry_delay)
                     continue
                 else:
-                    print(f"❌ LLM API调用最终失败，已重试 {max_retries} 次: {type(e).__name__}: {e}")
+                    logger.error(f"❌ LLM API调用最终失败，已重试 {max_retries} 次: {type(e).__name__}: {e}")
                     raise
 
 
@@ -690,7 +777,7 @@ try:
     assert GLOBAL_THINKING_LLM_CONFIG.api_key is not None
     GLOBAL_THINKING_LLM = LLMModel(GLOBAL_THINKING_LLM_CONFIG)
 except Exception as e:
-    print(f"加载thinking模型失败，使用llm模型替代: {e}")
+    logger.info(f"加载thinking模型失败，使用llm模型替代: {e}")
     GLOBAL_THINKING_LLM = GLOBAL_LLM
 
 try:
@@ -704,7 +791,7 @@ try:
     assert GLOBAL_VLM_CONFIG.api_key is not None
     GLOBAL_VISION_LLM = LLMModel(GLOBAL_VLM_CONFIG)
 except Exception as e:
-    print(f"加载vlm模型失败，vision能力不可用: {e}")
+    logger.info(f"加载vlm模型失败，vision能力不可用: {e}")
     GLOBAL_VISION_LLM = None
 
 if __name__ == "__main__":

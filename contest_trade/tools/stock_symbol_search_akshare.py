@@ -1,3 +1,4 @@
+from loguru import logger
 """
 Stock Symbol Search Tool (AKShare Version)
 Search for stock symbols by company names or partial symbols using AKShare data.
@@ -58,7 +59,7 @@ def get_stock_basic_akshare():
         return df
         
     except Exception as e:
-        print(f"Error fetching stock basic data: {e}")
+        logger.error(f"Error fetching stock basic data: {e}")
         return pd.DataFrame()
 
 def calculate_match_score(query: str, ts_code: str, name: str) -> tuple[str, float]:
@@ -171,7 +172,7 @@ async def stock_symbol_search(
                 "failed_queries": [{"query": q, "error": "No stock data available"} for q in queries]
             }
         
-        print(f"Loaded {len(symbols_df)} stocks for search")
+        logger.debug(f"Loaded {len(symbols_df)} stocks for search")
         
         # Process each query
         results = {}
@@ -186,13 +187,13 @@ async def stock_symbol_search(
                 matches = search_single_query(symbols_df, query.strip(), limit_per_query, match_mode, market)
                 if matches:
                     results[query] = matches
-                    print(f"Query '{query}': {len(matches)} matches found")
+                    logger.debug(f"Query '{query}': {len(matches)} matches found")
                 else:
                     failed_queries.append({"query": query, "error": "No matches found"})
-                    print(f"Query '{query}': No matches found")
+                    logger.debug(f"Query '{query}': No matches found")
             except Exception as e:
                 failed_queries.append({"query": query, "error": str(e)})
-                print(f"Query '{query}': Search error - {e}")
+                logger.debug(f"Query '{query}': Search error - {e}")
         
         # Generate summary (matches original version)
         summary = {
@@ -212,7 +213,7 @@ async def stock_symbol_search(
         
     except Exception as e:
         error_msg = f"Stock symbol search failed: {str(e)}"
-        print(error_msg)
+        logger.error(error_msg)
         return {
             "error": error_msg,
             "results": {},
@@ -230,6 +231,6 @@ if __name__ == "__main__":
             "limit_per_query": 3,
             "match_mode": "best"
         })
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        logger.debug(json.dumps(result, indent=2, ensure_ascii=False))
     
     asyncio.run(test())

@@ -1,3 +1,4 @@
+from loguru import logger
 """
 Contest评估模块
 

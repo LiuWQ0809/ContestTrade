@@ -131,7 +131,7 @@ class ToolManager:
             raise ValueError(f"Tool {tool_name} not found")
         
         try:
-            print("call tool", tool_name, kwargs)
+            logger.info(f"Calling tool: {tool_name} with args: {kwargs}")
             if hasattr(tool_func, 'invoke'):
                 return await tool_func.ainvoke(kwargs)
             elif asyncio.iscoroutinefunction(tool_func):
@@ -139,8 +139,7 @@ class ToolManager:
             else:
                 return tool_func(**kwargs)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Tool call failed: {tool_name}. Error: {e}")
             return {"error": "Call tool Failed", "error_msg": str(e)}
 
     def parse_bounding_json(response: str) -> dict:
@@ -168,13 +167,13 @@ class ToolManager:
             try:
                 response = await GLOBAL_LLM.a_run(messages, verbose=False, thinking=False, max_retries=5, max_tokens=1000)
                 llm_response = response.content
-                print("llm_response", llm_response)
+                logger.debug(f"Tool Selection LLM response: {llm_response}")
                 messages.append({"role": "assistant", "content": llm_response})
                 parsed_output = post_process_func(llm_response)
                 return parsed_output
             except json.JSONDecodeError:
                 error_msg += f"Failed to parse tool call {i+1} times"
-                print("Failed to parse tool call", llm_response)
+                logger.warning(f"Failed to parse tool call: {llm_response}")
             except Exception as e:
                 error_msg += f"Failed to call tool {i+1} times with error: {e}"
         return {"error": "Call tool Failed", "error_msg": error_msg}

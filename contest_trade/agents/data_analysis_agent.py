@@ -16,6 +16,7 @@ from langgraph.graph import StateGraph, END
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
+from loguru import logger
 from utils.llm_utils import count_tokens
 from models.llm_model import GLOBAL_LLM
 from langchain_core.runnables import RunnableConfig
@@ -144,13 +145,13 @@ class DataAnalysisAgent:
                 # 创建实例
                 data_source = data_source_class()
                 self.data_source_list.append(data_source)
-                print(f"Successfully loaded data source: {source_path}")
+                logger.debug(f"Successfully loaded data source: {source_path}")
                 
             except (ImportError, AttributeError) as e:
-                print(f"Error loading data source '{source_path}': {e}")
+                logger.error(f"Error loading data source '{source_path}': {e}")
                 continue
             except Exception as e:
-                print(f"Unexpected error loading '{source_path}': {e}")
+                logger.error(f"Unexpected error loading '{source_path}': {e}")
                 continue
 
 
@@ -187,18 +188,17 @@ class DataAnalysisAgent:
                     factor_data = json.load(f)
                 state["result"] = DataAnalysisAgentOutput(**factor_data)
         except Exception as e:
-            print(f"Error loading factor from file: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error loading factor from file: {e}")
+            logger.error(traceback.format_exc())
         return state
     
     async def _recompute_factor(self, state: DataAnalysisAgentState):
         """recompute factor"""
         if state["result"]:
-            print(f"Data already exists for {state['trigger_time']}, skipping recompute")
+            logger.debug(f"Data already exists for {state['trigger_time']}, skipping recompute")
             return "no"
         else:
-            print(f"Data does not exist for {state['trigger_time']}, recomputing factor")
+            logger.info(f"Data does not exist for {state['trigger_time']}, recomputing factor")
             return "yes"
 
     async def _preprocess(self, state: DataAnalysisAgentState) -> DataAnalysisAgentState:
@@ -206,7 +206,7 @@ class DataAnalysisAgent:
         try:
             data_dfs =[]
             for source in self.data_source_list:
-                print(f"Getting data from {source.__class__.__name__}...")
+                logger.info(f"Getting data from {source.__class__.__name__}...")
                 df = await source.get_data(state["trigger_time"])
                 required_columns = ['title', 'content', 'pub_time']
                 df = df[df['title'].str.strip() != '']
@@ -218,27 +218,40 @@ class DataAnalysisAgent:
             state["data_df"] = data_df
 
             total_docs = len(data_df)
-            batch_count = self.config.batch_count
-            batch_size = total_docs // batch_count + 1
-            if total_docs % batch_count:
+            
+            # 优化：根据文档数量动态调整batch_count
+            # 如果文档很少，没必要分多批次增加API调用次数
+            max_batch_count = self.config.batch_count
+            batch_count = max_batch_count
+            
+            # 如果文档总数小于 title_selection_per_batch 的2倍，合并为一个批次
+            if total_docs <= self.config.title_selection_per_batch * 2:
+                batch_count = 1
+            # 否则，确保每个batch至少有一定数量的文档
+            else:
+                suggested_batch_count = total_docs // self.config.title_selection_per_batch
+                batch_count = max(1, min(max_batch_count, suggested_batch_count))
+
+            batch_size = total_docs // batch_count if batch_count > 0 else 0
+            if batch_count > 0 and total_docs % batch_count:
                 batch_size += 1
+                
             state["batch_info"] = {
                 'batch_count': batch_count,
                 'batch_size': batch_size,
                 'total_data': total_docs,
-                'titles_per_batch': min(self.config.title_selection_per_batch, batch_size)
+                'titles_per_batch': min(self.config.title_selection_per_batch, batch_size if batch_size > 0 else total_docs)
             }
         except Exception as e:
-            print(f"Error preprocessing data: {e}")
-            traceback.print_exc()
+            logger.error(f"Error preprocessing data: {e}")
             return state
-        print("preprocess success")
+        logger.info("preprocess success")
         return state
     
    
     async def _batch_process(self, state: DataAnalysisAgentState) -> DataAnalysisAgentState:
         """Asynchronously process all document batches, return detailed results"""
-        print("begin batch process")
+        logger.info("begin batch process")
         try:
             batch_tasks = []
             for i in range(state["batch_info"]['batch_count']):
@@ -277,8 +290,7 @@ class DataAnalysisAgent:
                     batch_results.append(result)
             
         except Exception as e:
-            print(f"Error processing batch: {e}")
-            traceback.print_exc()
+            logger.error(f"Error processing batch: {e}")
             batch_results = []
         state["batch_results"] = batch_results
         return state
@@ -392,7 +404,7 @@ class DataAnalysisAgent:
             "error": None
         }
         
-        print(f"Starting to process batch {batch_idx} ({len(batch_df)} documents)...")
+        logger.info(f"Starting to process batch {batch_idx} ({len(batch_df)} documents)...")
         
         try:
             # Filter document titles
@@ -422,12 +434,11 @@ class DataAnalysisAgent:
             summary_ref_ids = [int(i) for i in re.findall(r'\[(\d+)\]', summary)]
             batch_result["references"] = filtered_df[filtered_df["id"].isin(summary_ref_ids)].to_dict(orient="records")
             
-            print(f"Completed processing batch {batch_idx}")
+            logger.info(f"Completed processing batch {batch_idx}")
             
         except Exception as e:
             error_msg = f"Error processing batch {batch_idx}: {e}"
-            traceback.print_exc()
-            print(error_msg)
+            logger.error(error_msg)
             batch_result["error"] = error_msg
         
         # Record batch processing completion time
@@ -460,6 +471,7 @@ class DataAnalysisAgent:
         
         messages = [{"role": "user", "content": prompt}]
         response = await GLOBAL_LLM.a_run(messages, verbose=False, thinking=False)
+        logger.debug(f"Title filter response: {response.content}")
         
         # Parse LLM returned IDs
         try:
@@ -537,11 +549,9 @@ class DataAnalysisAgent:
             factor_file = self.factor_dir / f'{state["trigger_time"].replace(" ", "_").replace(":", "-")}.json'
             with open(factor_file, 'w', encoding='utf-8') as f:
                 json.dump(state["result"].to_dict(), f, ensure_ascii=False, indent=4)
-            print(f"Data analysis result saved to {factor_file}")
+            logger.info(f"Data analysis result saved to {factor_file}")
         except Exception as e:
-            print(f"Error writing result: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error writing result: {e}")
         return state
 
     async def run_with_monitoring_events(self, input: DataAnalysisAgentInput, config: RunnableConfig = None) -> DataAnalysisAgentOutput:
@@ -563,7 +573,7 @@ class DataAnalysisAgent:
             result=None
         )
         
-        print(f"🚀 Data Analysis Agent Starting - {input.trigger_time}")
+        logger.info(f"🚀 Data Analysis Agent Starting - {input.trigger_time}")
         
         # 返回事件流
         async for event in self.app.astream_events(initial_state, version="v2", config=config or RunnableConfig(recursion_limit=50)):
@@ -578,11 +588,11 @@ class DataAnalysisAgent:
             if event_type == "on_chain_start":
                 node_name = event["name"]
                 if node_name != "__start__":  # 忽略开始事件
-                    print(f"🔄 Starting: {node_name}")
+                    logger.info(f"🔄 Starting: {node_name}")
             elif event_type == "on_chain_end":
                 node_name = event["name"]
                 if node_name != "__start__":  # 忽略开始事件
-                    print(f"✅ Completed: {node_name}")
+                    logger.info(f"✅ Completed: {node_name}")
                     if node_name == "submit_result":
                         final_state = event.get("data", {}).get("output", None)
                         if final_state and "result" in final_state and final_state["result"]:

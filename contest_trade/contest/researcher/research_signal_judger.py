@@ -1,3 +1,4 @@
+from loguru import logger
 """
 Research信号评分器
 """

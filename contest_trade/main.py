@@ -4,6 +4,7 @@ Simplified Trade Company - 合并所有代码，包装成LangGraph工作流
 import re
 import json
 import asyncio
+from loguru import logger
 from datetime import datetime
 from typing import List, Dict, TypedDict
 from langgraph.graph import END, StateGraph
@@ -21,6 +22,7 @@ class CompanyState(TypedDict):
     research_signals: List[Dict]
     all_events: List[Dict]
     step_results: Dict
+    portfolio_info: Dict  # 新增：账户资金和持仓信息
 
 class SimpleTradeCompany:
     def __init__(self):
@@ -58,7 +60,7 @@ class SimpleTradeCompany:
         """运行Data Agents步骤"""
         trigger_time = state["trigger_time"]
         
-        print("🚀 开始并发运行Data Agents...")
+        logger.info("🚀 开始并发运行Data Agents...")
         
         # 创建并发任务
         agent_tasks = []
@@ -77,7 +79,7 @@ class SimpleTradeCompany:
                 all_factors.append(result["factor"])
                 all_events.extend(result["events"])
         
-        print(f"✅ Data Agents完成，有效结果: {len(all_factors)}")
+        logger.info(f"✅ Data Agents完成，有效结果: {len(all_factors)}")
         
         # 更新状态
         all_events_state = state["all_events"].copy()
@@ -96,13 +98,14 @@ class SimpleTradeCompany:
         """运行Research Agents步骤"""
         trigger_time = state["trigger_time"]
         data_factors = state["data_factors"]
+        portfolio_info = state.get("portfolio_info", {})
         
-        print("🚀 开始并发运行Research Agents...")
+        logger.info("🚀 开始并发运行Research Agents...")
         
         # 创建并发任务
         agent_tasks = []
         for agent_id, agent in self.research_agents.items():
-            task = self._run_single_research_agent(agent_id, agent, trigger_time, data_factors, config)
+            task = self._run_single_research_agent(agent_id, agent, trigger_time, data_factors, config, portfolio_info)
             agent_tasks.append(task)
         
         # 并发执行
@@ -116,7 +119,7 @@ class SimpleTradeCompany:
                 all_signals.extend(result["signals"])
                 all_events.extend(result["events"])
         
-        print(f"✅ Research Agents完成，有效信号总数: {len(all_signals)}")
+        logger.info(f"✅ Research Agents完成，有效信号总数: {len(all_signals)}")
         
         # 更新状态
         all_events_state = state["all_events"].copy()
@@ -139,7 +142,7 @@ class SimpleTradeCompany:
         all_events = state["all_events"]
         step_results = state["step_results"]
         
-        print("🚀 开始最终结果步骤...")
+        logger.info("🚀 开始最终结果步骤...")
         # 优先使用research产生的信号作为最终最佳信号
         best_signals = research_signals if research_signals else []
 
@@ -153,7 +156,7 @@ class SimpleTradeCompany:
             "step_results": step_results
         }
 
-        print("✅ 最终结果步骤完成")
+        logger.info("✅ 最终结果步骤完成")
 
         step_results = state["step_results"]
         step_results["contest"] = {
@@ -166,7 +169,7 @@ class SimpleTradeCompany:
     # 辅助函数
     async def _run_single_data_agent(self, agent_id: int, agent, trigger_time: str, config: RunnableConfig):
         """运行单个data agent"""
-        print(f"🔍 开始运行Data Agent {agent_id} ({agent.config.agent_name})...")
+        logger.info(f"🔍 开始运行Data Agent {agent_id} ({agent.config.agent_name})...")
         
         agent_input = DataAnalysisAgentInput(trigger_time=trigger_time)
         agent_events = []
@@ -200,12 +203,25 @@ class SimpleTradeCompany:
             factor = agent_output['result']
         return {"factor": factor, "events": agent_events} if factor else None
 
-    async def _run_single_research_agent(self, agent_id: int, agent, trigger_time: str, factors: List, config: RunnableConfig):
+    async def _run_single_research_agent(self, agent_id: int, agent, trigger_time: str, factors: List, config: RunnableConfig, portfolio_info: Dict = None):
         """运行单个research agent"""
-        print(f"🔍 开始运行Research Agent {agent_id} ({agent.config.agent_name})...")
+        logger.info(f"🔍 开始运行Research Agent {agent_id} ({agent.config.agent_name})...")
         
-        # 构建背景信息
+        # 构建背景信息，加入账户信息
         background_information = agent.build_background_information(trigger_time, agent.config.belief, factors)
+        
+        if portfolio_info:
+            cash = portfolio_info.get("cash", 0)
+            holdings = portfolio_info.get("holdings", {})
+            total_fees = portfolio_info.get("total_fees", 0)
+            holdings_str = ", ".join([f"{h.get('name', k)}({k})" for k, h in holdings.items()]) if holdings else "无"
+            account_context = f"\n<account_info>\n当前可用现金: {cash:.2f}\n当前持仓股票: {holdings_str}\n累计已支付交易费: {total_fees:.2f}\n"
+            account_context += "交易费率提示: A股交易存在成本 (佣金0.03%[最低5元], 卖出额外印花税0.05%, 过户费等)。单笔买入5000元约产生6.5元费用，卖出约产生9元费用。请避免买入预期涨幅无法覆盖交易成本的股票。\n"
+            if cash < 1000: # 假设 1000 为起投金额
+                account_context += "提示: 当前可用资金极低。如果你发现必须买入的绝佳机会，你必须同时识别并建议卖出（SELL）当前持仓中表现较差的股票以释放资金，否则买入动作指令将会因资金不足而失败。\n"
+            account_context += "</account_info>\n"
+            background_information = account_context + background_information
+
         agent_input = ResearchAgentInput(
             trigger_time=trigger_time,
             background_information=background_information
@@ -273,54 +289,58 @@ class SimpleTradeCompany:
                     if signal:
                         signals.append(signal)
                 except Exception as e:
-                    print(f"Error parsing individual signal: {e}")
+                    logger.error(f"Error parsing individual signal: {e}")
                     continue
         
         except Exception as e:
-            print(f"Error parsing multiple results: {e}")
+            logger.error(f"Error parsing multiple results: {e}")
         
         return signals
 
     def _parse_single_signal_block(self, signal_block: str, thinking: str):
         """解析单个信号块"""
+        def extract_tag(tag, text, default=""):
+            match = re.search(f"<{tag}>(.*?)</{tag}>", text, flags=re.DOTALL)
+            return match.group(1).strip() if match else default
+
         try:
-            has_opportunity = re.search(r"<has_opportunity>(.*?)</has_opportunity>", signal_block, flags=re.DOTALL).group(1).strip()
-            action = re.search(r"<action>(.*?)</action>", signal_block, flags=re.DOTALL).group(1).strip()
-            symbol_code = re.search(r"<symbol_code>(.*?)</symbol_code>", signal_block, flags=re.DOTALL).group(1).strip()
-            symbol_name = re.search(r"<symbol_name>(.*?)</symbol_name>", signal_block, flags=re.DOTALL).group(1).strip()
+            has_opportunity = extract_tag("has_opportunity", signal_block, "no")
+            action = extract_tag("action", signal_block, "hold")
+            symbol_code = extract_tag("symbol_code", signal_block, "N/A")
+            symbol_name = extract_tag("symbol_name", signal_block, "N/A")
             
             # 解析evidence_list
-            evidence_list_str = re.search(r"<evidence_list>(.*?)</evidence_list>", signal_block, flags=re.DOTALL).group(1)
             evidence_list = []
-            for item in evidence_list_str.split("<evidence>"):
-                if '</evidence>' not in item:
-                    continue
-                evidence_description = item.split("</evidence>")[0].strip()
-                try:
-                    evidence_time = re.search(r"<time>(.*?)</time>", item, flags=re.DOTALL).group(1).strip()
-                except:
-                    evidence_time = "N/A"
-                try:
-                    evidence_from_source = re.search(r"<from_source>(.*?)</from_source>", item, flags=re.DOTALL).group(1).strip()
-                except:
-                    evidence_from_source = "N/A"
-                    
-                evidence_list.append({
-                    "description": evidence_description,
-                    "time": evidence_time,
-                    "from_source": evidence_from_source,
-                })
+            evidence_list_match = re.search(r"<evidence_list>(.*?)</evidence_list>", signal_block, flags=re.DOTALL)
+            if evidence_list_match:
+                evidence_list_str = evidence_list_match.group(1)
+                for item in evidence_list_str.split("<evidence>"):
+                    if '</evidence>' not in item:
+                        continue
+                    evidence_description = item.split("</evidence>")[0].strip()
+                    evidence_time = extract_tag("time", item, "N/A")
+                    evidence_from_source = extract_tag("from_source", item, "N/A")
+                        
+                    evidence_list.append({
+                        "description": evidence_description,
+                        "time": evidence_time,
+                        "from_source": evidence_from_source,
+                    })
 
             # 解析limitations
-            limitations_str = re.search(r"<limitations>(.*?)</limitations>", signal_block, flags=re.DOTALL).group(1)
-            limitations = re.findall(r"<limitation>(.*?)</limitation>", limitations_str, flags=re.DOTALL)
-            limitations = [l.strip() for l in limitations]
+            limitations = []
+            limitations_match = re.search(r"<limitations>(.*?)</limitations>", signal_block, flags=re.DOTALL)
+            if limitations_match:
+                limitations_str = limitations_match.group(1)
+                limitations = re.findall(r"<limitation>(.*?)</limitation>", limitations_str, flags=re.DOTALL)
+                limitations = [l.strip() for l in limitations]
             
             # 解析probability
-            probability = re.search(r"<probability>(.*?)</probability>", signal_block, flags=re.DOTALL).group(1).strip()
+            probability = extract_tag("probability", signal_block, "0%")
             
             # 修正symbol信息
-            symbol_name, symbol_code = GLOBAL_MARKET_MANAGER.fix_symbol_code("CN-Stock", symbol_name, symbol_code)
+            if symbol_name != "N/A" or symbol_code != "N/A":
+                symbol_name, symbol_code = GLOBAL_MARKET_MANAGER.fix_symbol_code("CN-Stock", symbol_name, symbol_code)
             
             return {
                 "thinking": thinking,
@@ -333,7 +353,7 @@ class SimpleTradeCompany:
                 "probability": probability,
             }
         except Exception as e:
-            print(f"Error parsing single signal block: {e}")
+            logger.error(f"Error parsing single signal block: {e}")
             return None
 
     # LangGraph工作流创建
@@ -356,9 +376,9 @@ class SimpleTradeCompany:
 
         return workflow.compile()
 
-    async def run_company(self, trigger_time: str, config: RunnableConfig = None):
+    async def run_company(self, trigger_time: str, config: RunnableConfig = None, portfolio_info: Dict = None):
         """运行整个公司流程"""
-        print("🚀 开始运行Simplified TradeCompany...")
+        logger.info("🚀 开始运行Simplified TradeCompany...")
         
         if config is None:
             config = RunnableConfig(recursion_limit=50)
@@ -369,15 +389,16 @@ class SimpleTradeCompany:
             data_factors=[],
             research_signals=[],
             all_events=[],
-            step_results={}
+            step_results={},
+            portfolio_info=portfolio_info or {}
         )
         
         # 运行工作流
         workflow = self.create_company_workflow()
         final_state = await workflow.ainvoke(initial_state, config=config)
         
-        print("✅ Simplified TradeCompany完成")
-        print(f"📊 最终结果:")
+        logger.info("✅ Simplified TradeCompany完成")
+        logger.info(f"📊 最终结果:")
         
         # 从step_results中获取更准确的统计信息
         step_results = final_state.get('step_results', {})
@@ -388,9 +409,9 @@ class SimpleTradeCompany:
         research_signals_count = research_team_results.get("signals_count", len(final_state.get('research_signals', [])))
         total_events_count = len(final_state.get('all_events', []))
         
-        print(f"   数据因子: {data_factors_count}")
-        print(f"   研究信号: {research_signals_count}")
-        print(f"   总事件: {total_events_count}")
+        logger.info(f"   数据因子: {data_factors_count}")
+        logger.info(f"   研究信号: {research_signals_count}")
+        logger.info(f"   总事件: {total_events_count}")
         
         return final_state
 
@@ -418,8 +439,8 @@ if __name__ == "__main__":
         company = SimpleTradeCompany()
         
         # 使用事件流运行
-        print("🚀 开始测试Simplified TradeCompany事件流...")
-        print("=" * 60)
+        logger.info("🚀 开始测试Simplified TradeCompany事件流...")
+        logger.info("=" * 60)
 
         trigger_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
@@ -435,10 +456,10 @@ if __name__ == "__main__":
             
             if event_type == "on_chain_start":
                 if event_name != "__start__":
-                    print(f"🔄 Company开始: {event_name}")
+                    logger.info(f"🔄 Company开始: {event_name}")
             elif event_type == "on_chain_end":
                 if event_name != "__start__":
-                    print(f"✅ Company完成: {event_name}")
+                    logger.info(f"✅ Company完成: {event_name}")
                     if event_name == "finalize":
                         final_state = event.get("data", {}).get("output", {})
             elif event_type == "on_custom":
@@ -447,15 +468,15 @@ if __name__ == "__main__":
                 
                 if custom_name.startswith("data_agent_"):
                     agent_id = custom_data.get("agent_id", "unknown")
-                    print(f"📊 Data Agent {agent_id}: {custom_name}")
+                    logger.info(f"📊 Data Agent {agent_id}: {custom_name}")
                 elif custom_name.startswith("research_agent_"):
                     agent_id = custom_data.get("agent_id", "unknown")
-                    print(f"🔍 Research Agent {agent_id}: {custom_name}")
+                    logger.info(f"🔍 Research Agent {agent_id}: {custom_name}")
                 else:
-                    print(f"🎯 自定义事件: {custom_name}")
+                    logger.info(f"🎯 自定义事件: {custom_name}")
         
-        print("=" * 60)
-        print(f"✅ 公司工作流完成:")
+        logger.info("=" * 60)
+        logger.info(f"✅ 公司工作流完成:")
         if final_state:
             step_results = final_state.get('step_results', {})
             data_team_results = step_results.get("data_team", {})
@@ -464,10 +485,10 @@ if __name__ == "__main__":
             data_factors_count = data_team_results.get("factors_count", len(final_state.get('data_factors', [])))
             research_signals_count = research_team_results.get("signals_count", len(final_state.get('research_signals', [])))
             
-            print(f"   数据因子: {data_factors_count}")
-            print(f"   研究信号: {research_signals_count}")
+            logger.info(f"   数据因子: {data_factors_count}")
+            logger.info(f"   研究信号: {research_signals_count}")
         else:
-            print(f"   无最终状态数据")
-        print(f"   公司事件总数: {len(company_events)}")
+            logger.info(f"   无最终状态数据")
+        logger.info(f"   公司事件总数: {len(company_events)}")
         
     asyncio.run(main())

@@ -1,3 +1,4 @@
+from loguru import logger
 """
 Research预测模块
 """

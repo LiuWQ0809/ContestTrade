@@ -1,3 +1,4 @@
+from loguru import logger
 """
 ResearchContest - 统一的研究信号竞争系统
 

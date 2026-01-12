@@ -1,3 +1,4 @@
+from loguru import logger
 """
 Data Summary Based On Akshare
 """
@@ -209,18 +210,18 @@ class StockSummaryInput(BaseModel):
 # --- Main Analysis Function (Refactored) ---
 async def analyze_stock_basic_info(market, symbol, stock_name, trigger_time):
     """Main analysis function, redesigned for Akshare-available dimensions."""
-    print("📊  Fetching K-line & indicators via Akshare...")
+    logger.debug("📊  Fetching K-line & indicators via Akshare...")
     all_data = get_all_stock_data(market, symbol, stock_name, trigger_time)
-    print("✅  Data fetching complete.")
+    logger.debug("✅  Data fetching complete.")
 
     # News data (optional)
     try:
         news_result = await search_web.ainvoke({"query": f"{stock_name}", "topk": 10, "trigger_time": trigger_time})
         news_analysis = '\n'.join(map(str, news_result)) if isinstance(news_result, list) else str(news_result)
-        print("✅  News fetching complete.")
+        logger.debug("✅  News fetching complete.")
     except Exception as e:
         news_analysis = f"相关新闻获取失败: {e}"
-        print(f"❌  News fetching failed: {e}")
+        logger.error(f"❌  News fetching failed: {e}")
 
     prompt_template = f"""请为{stock_name}({symbol})生成一份基于可用数据的股票技术分析报告。
 分析时间: {trigger_time}
@@ -242,7 +243,7 @@ async def analyze_stock_basic_info(market, symbol, stock_name, trigger_time):
     if market == "US-Stock":
         prompt_template += "\n\n请用英文输出美股分析报告"
 
-    print("🤖  Starting LLM technical analysis...")
+    logger.debug("🤖  Starting LLM technical analysis...")
     try:
         analysis_result = await call_llm_for_comprehensive_analysis(
             prompt_template, 
@@ -251,7 +252,7 @@ async def analyze_stock_basic_info(market, symbol, stock_name, trigger_time):
         )
         return analysis_result
     except Exception as e:
-        print(f"❌  LLM analysis failed: {e}")
+        logger.error(f"❌  LLM analysis failed: {e}")
         return f'LLM分析失败: {e}'
 
 
@@ -288,4 +289,4 @@ if __name__ == "__main__":
          "symbol": "600519.SH", 
          "trigger_time": "2025-07-09 15:00:00"}))
          
-    print(result)
+    logger.debug(result)

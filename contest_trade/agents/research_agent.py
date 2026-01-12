@@ -164,18 +164,16 @@ class ResearchAgent:
                     signal_data = json.load(f)
                 state["result"] = ResearchAgentOutput(**signal_data)
         except Exception as e:
-            print(f"Error loading signal from file: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error loading signal from file: {e}")
         return state
     
     async def _recompute_signal(self, state: ResearchAgentState):
         """recompute signal"""
         if state["result"]:
-            print(f"Signal already exists for {state['trigger_time']}, skipping recompute")
+            logger.info(f"Signal already exists for {state['trigger_time']}, skipping recompute")
             return "no"
         else:
-            print(f"Signal does not exist for {state['trigger_time']}, recomputing signal")
+            logger.info(f"Signal does not exist for {state['trigger_time']}, recomputing signal")
             return "yes"
 
     async def _init_data(self, state: ResearchAgentState) -> ResearchAgentState:
@@ -270,18 +268,30 @@ class ResearchAgent:
         """调用工具"""
         selected_tool = state["selected_tool"]
         try:
-            print('Begin to call tool: ', selected_tool)
+            logger.info(f"Begin to call tool: {selected_tool}")
             tool_name = selected_tool["tool_name"]
             tool_args = selected_tool["properties"]
             tool_result = await self.tool_manager.call_tool(tool_name, tool_args, state["trigger_time"])
-            print("tool_result: ", tool_result)
+            logger.debug(f"tool_result: {tool_result}")
         except Exception as e:
             logger.error(f"Error in call_tool: {e}")
             tool_result = {"error": str(e)}
         
         state["tool_call_count"] += 1
+        
+        # 优化：对过大的工具返回结果进行截断，节省 Token 消耗和 Context 空间
+        max_res_len = 3000
+        display_res = tool_result
+        if isinstance(display_res, str) and len(display_res) > max_res_len:
+            display_res = display_res[:max_res_len] + f"... (内容过长已截断, 完整长度 {len(display_res)} 字符)"
+        elif isinstance(display_res, (list, dict)):
+             res_str = json.dumps(display_res, ensure_ascii=False)
+             if len(res_str) > max_res_len:
+                 display_res = json.loads(res_str[:max_res_len] + '"}') if res_str.startswith('{') else []
+                 display_res = f"{res_str[:max_res_len]}... (JSON数据过长已截断)"
+
         state["tool_call_context"] += json.dumps({"tool_called":selected_tool,\
-                                            "tool_result":tool_result}, ensure_ascii=False) + "\n"
+                                            "tool_result":display_res}, ensure_ascii=False) + "\n"
         return state
 
 
@@ -329,11 +339,9 @@ class ResearchAgent:
             signal_file = self.signal_dir / f'{state["trigger_time"].replace(" ", "_").replace(":", "-")}.json'
             with open(signal_file, 'w', encoding='utf-8') as f:
                 json.dump(state["result"].to_dict(), f, ensure_ascii=False, indent=4)
-            print(f"Research result saved to {signal_file}")
+            logger.info(f"Research result saved to {signal_file}")
         except Exception as e:
-            print(f"Error writing result: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error writing result: {e}")
         return state
 
     def build_background_information(self, trigger_time: str, belief: str, factors: List):
@@ -411,30 +419,30 @@ class ResearchAgent:
             final_result_thinking="",
             result=None
         )
-        print(f"🚀 Research Agent Starting - {input.trigger_time}")
+        logger.info(f"🚀 Research Agent Starting - {input.trigger_time}")
         async for event in self.app.astream_events(initial_state, version="v2", config=config or RunnableConfig(recursion_limit=50)):
             yield event
 
     async def run_with_monitoring(self, input: ResearchAgentInput) -> ResearchAgentOutput:
         """使用事件流监控运行Agent"""
-        print(f"🚀 Research Agent Starting - {input.trigger_time}")
+        logger.info(f"🚀 Research Agent Starting - {input.trigger_time}")
         final_result = None
         async for event in self.run_with_monitoring_events(input, RunnableConfig(recursion_limit=50)):
             event_type = event["event"]
             if event_type == "on_chain_start":
                 node_name = event["name"]
                 if node_name != "__start__":  # 忽略开始事件
-                    print(f"🔄 Starting: {node_name}")
+                    logger.debug(f"🔄 Starting: {node_name}")
                 
             elif event_type == "on_chain_end":
                 node_name = event["name"]
                 if node_name != "__start__":  # 忽略开始事件
-                    print(f"✅ Completed: {node_name}")
+                    logger.debug(f"✅ Completed: {node_name}")
                     if node_name == "submit_result":
                         final_state = event.get("data", {}).get("output", None)
                         if final_state and "result" in final_state and final_state["result"]:
                             return final_state["result"]
-        print(f"✨ Research Agent Completed")
+        logger.info(f"✨ Research Agent Completed")
         return final_result
         
 
@@ -453,5 +461,5 @@ if __name__ == "__main__":
         background_information="123123123"
     )
     agent_output = asyncio.run(agent.run_with_monitoring(agent_input))
-    print(agent_output.to_dict())
+    logger.info(agent_output.to_dict())
 

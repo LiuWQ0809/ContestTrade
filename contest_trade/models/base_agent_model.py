@@ -187,8 +187,6 @@ class BaseAgentModel(ABC):
                 full_content += chunk.content
             if chunk.raw_chunk is not None:
                 raw_chunks.append(chunk.raw_chunk)
-                if verbose:
-                    print(chunk.content, end="", flush=True)
         
         # Create a response with the collected content
         return ModelResponse(

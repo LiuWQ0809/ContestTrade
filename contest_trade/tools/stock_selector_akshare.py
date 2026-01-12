@@ -1,3 +1,4 @@
+from loguru import logger
 """
 Stock Selector Tool (Akshare Version)
 Based on natural language query and akshare stock basic data.
@@ -157,7 +158,7 @@ async def stock_selector(market: str, query: str, trigger_time: str, limit: int 
     
     try:
         stock_df = get_basic_stock_df_akshare(trigger_time)
-        print(stock_df['industry'].unique().tolist())
+        logger.debug(stock_df['industry'].unique().tolist())
         
         if stock_df.empty:
             return f"Error: Failed to fetch stock data from akshare."
@@ -165,7 +166,7 @@ async def stock_selector(market: str, query: str, trigger_time: str, limit: int 
         prompt = STOCK_FILTER_PROMPT_AKSHARE.format(query=query)
         messages = [{"role": "user", "content": prompt}]
         response = await GLOBAL_LLM.a_run(messages, verbose=False, thinking=False)
-        print(response.content)
+        logger.debug(response.content)
 
         code_match = re.search(r"```python(.*?)```", response.content, re.DOTALL)
         if not code_match:
@@ -201,4 +202,4 @@ if __name__ == "__main__":
         "trigger_time": "2025-08-20 09:00:00",
         "limit": 5
     }))
-    print(result)
+    logger.debug(result)
