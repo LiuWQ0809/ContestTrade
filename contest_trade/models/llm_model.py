@@ -163,16 +163,36 @@ class OpenAIProvider(BaseProvider):
             **kwargs
         }
         
+        # Add any extra config from the provider configuration
+        if self.config.extra_config:
+            for key, value in self.config.extra_config.items():
+                if key not in params:
+                    params[key] = value
+        
         if max_tokens is not None:
             params["max_tokens"] = max_tokens
         
         # Handle thinking mode for compatible models
-        if 'thinking' in params:
-            thinking_flag = params.pop('thinking')
+        # Pop both possible keys to prevent them from being passed as invalid keyword arguments to the API
+        thinking_flag_explicit = params.pop('thinking', None)
+        thinking_flag_config = params.pop('enable_thinking', None)
+        
+        # Priority to explicit 'thinking' argument from the caller
+        thinking_flag = thinking_flag_explicit if thinking_flag_explicit is not None else thinking_flag_config
+            
+        if thinking_flag is not None:
+            extra_body = params.get('extra_body', {})
             if thinking_flag:
-                params['extra_body'] = {"thinking": {"type": "enabled"}}
+                if self.base_url and "dashscope" in self.base_url:
+                    extra_body["enable_thinking"] = True
+                else:
+                    extra_body["thinking"] = {"type": "enabled"}
             else:
-                params['extra_body'] = {"thinking": {"type": "disabled"}}
+                if self.base_url and "dashscope" in self.base_url:
+                    extra_body["enable_thinking"] = False
+                else:
+                    extra_body["thinking"] = {"type": "disabled"}
+            params['extra_body'] = extra_body
         
         return await self.async_client.chat.completions.create(**params)
     
@@ -759,20 +779,14 @@ def detect_provider(model_name: str, base_url: str = None) -> str:
 # Create global configurations with auto-detected providers
 llm_provider = cfg.llm.get("provider", detect_provider(cfg.llm["model_name"], cfg.llm.get("base_url")))
 GLOBAL_LLM_CONFIG = LLMModelConfig(
-    provider=llm_provider,
-    model_name=cfg.llm["model_name"],
-    api_key=cfg.llm.get("api_key"),
-    base_url=cfg.llm.get("base_url")
+    **{**cfg.llm, "provider": llm_provider}
 )
 GLOBAL_LLM = LLMModel(GLOBAL_LLM_CONFIG)
 
 try:
     thinking_provider = cfg.llm_thinking.get("provider", detect_provider(cfg.llm_thinking["model_name"], cfg.llm_thinking.get("base_url")))
     GLOBAL_THINKING_LLM_CONFIG = LLMModelConfig(
-        provider=thinking_provider,
-        model_name=cfg.llm_thinking["model_name"],
-        api_key=cfg.llm_thinking.get("api_key"),
-        base_url=cfg.llm_thinking.get("base_url")
+        **{**cfg.llm_thinking, "provider": thinking_provider}
     )
     assert GLOBAL_THINKING_LLM_CONFIG.api_key is not None
     GLOBAL_THINKING_LLM = LLMModel(GLOBAL_THINKING_LLM_CONFIG)
@@ -783,10 +797,7 @@ except Exception as e:
 try:
     vlm_provider = cfg.vlm.get("provider", detect_provider(cfg.vlm["model_name"], cfg.vlm.get("base_url")))
     GLOBAL_VLM_CONFIG = LLMModelConfig(
-        provider=vlm_provider,
-        model_name=cfg.vlm["model_name"],
-        api_key=cfg.vlm.get("api_key"),
-        base_url=cfg.vlm.get("base_url")
+        **{**cfg.vlm, "provider": vlm_provider}
     )
     assert GLOBAL_VLM_CONFIG.api_key is not None
     GLOBAL_VISION_LLM = LLMModel(GLOBAL_VLM_CONFIG)

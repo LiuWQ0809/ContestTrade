@@ -95,20 +95,39 @@ class SimpleTradeCompany:
         }
 
     async def run_research_agents_step(self, state: CompanyState, config: RunnableConfig) -> CompanyState:
-        """运行Research Agents步骤"""
+        """运行Research Agents步骤 - 并行化优化版"""
         trigger_time = state["trigger_time"]
         data_factors = state["data_factors"]
         portfolio_info = state.get("portfolio_info", {})
         
-        logger.info("🚀 开始并发运行Research Agents...")
+        if not data_factors:
+            logger.warning("No data factors found, skipping research step.")
+            return state
+
+        # 优化：并行化处理逻辑
+        # 我们将 data_factors 进行分块，每个 Agent 负责处理一小块资讯，
+        # 从而实现“并行分析多个候选票”，显著降低 Qwen 思考模式的串行等待时间。
+        num_factors = len(data_factors)
+        num_chunks = 2 if num_factors > 1 else 1 # 按照 2 个分块进行初步拆分，可根据资源调整
+        
+        # 这种分块方式可以确保不同的资讯块被不同的 Agent 实例并发处理
+        factor_chunks = []
+        chunk_size = (num_factors + num_chunks - 1) // num_chunks
+        for i in range(0, num_factors, chunk_size):
+            factor_chunks.append(data_factors[i:i + chunk_size])
+
+        logger.info(f"🚀 正在并发运行 Research Agents (分块并行化: {len(self.research_agents)} 策略 x {len(factor_chunks)} 数据块)...")
         
         # 创建并发任务
         agent_tasks = []
         for agent_id, agent in self.research_agents.items():
-            task = self._run_single_research_agent(agent_id, agent, trigger_time, data_factors, config, portfolio_info)
-            agent_tasks.append(task)
+            for chunk_id, chunk_data in enumerate(factor_chunks):
+                # 唯一的子任务 ID
+                sub_task_id = f"{agent_id}_{chunk_id}"
+                task = self._run_single_research_agent(sub_task_id, agent, trigger_time, chunk_data, config, portfolio_info)
+                agent_tasks.append(task)
         
-        # 并发执行
+        # 并发执行所有子任务
         results = await asyncio.gather(*agent_tasks)
         
         # 收集结果
@@ -119,17 +138,26 @@ class SimpleTradeCompany:
                 all_signals.extend(result["signals"])
                 all_events.extend(result["events"])
         
-        logger.info(f"✅ Research Agents完成，有效信号总数: {len(all_signals)}")
+        # 对信号进行去重（可能多块数据提到了同一个好机会）
+        unique_signals = []
+        seen_symbols = set()
+        for sig in sorted(all_signals, key=lambda x: x.get('probability', 0), reverse=True):
+            sym = sig.get('symbol_code')
+            if sym not in seen_symbols:
+                unique_signals.append(sig)
+                seen_symbols.add(sym)
+        
+        logger.info(f"✅ Research Agents并行完成，原始信号: {len(all_signals)}, 去重后信号: {len(unique_signals)}")
         
         # 更新状态
         all_events_state = state["all_events"].copy()
         all_events_state.extend(all_events)
         
         step_results = state["step_results"].copy()
-        step_results["research_team"] = {"signals_count": len(all_signals), "events_count": len(all_events)}
+        step_results["research_team"] = {"signals_count": len(unique_signals), "events_count": len(all_events)}
         
         return {
-            "research_signals": all_signals,
+            "research_signals": unique_signals,
             "all_events": all_events_state,
             "step_results": step_results
         }

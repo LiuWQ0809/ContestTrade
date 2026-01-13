@@ -20,6 +20,8 @@ sys.path.append(str(PROJECT_ROOT / "contest_trade"))
 
 from contest_trade.main import SimpleTradeCompany
 from auto_trade.portfolio import VirtualPortfolio
+from contest_trade.utils.notification import send_pushplus_msg
+from contest_trade.config.config import cfg
 
 # Setup logging
 LOG_DIR = PROJECT_ROOT / "agents_workspace" / "logs"
@@ -82,6 +84,11 @@ def log_file_filter(record):
     """文件日志过滤器：排除冗余的 Agent 执行过程，仅保留核心交易和报表"""
     # 排除名单：这些模块的 INFO 日志太频繁，不存入文件
     exclude_modules = ["agents", "contest_trade", "data_source", "tools"]
+    
+    # 特例：允许通知模块的 INFO 日志进入文件
+    if "notification" in record["name"]:
+        return True
+        
     if record["level"].name == "INFO":
         for mod in exclude_modules:
             if record["name"].startswith(mod):
@@ -103,13 +110,24 @@ class AutoTrader:
         self.portfolio = VirtualPortfolio(PROJECT_ROOT / "agents_workspace" / "portfolio.json")
         self.last_run_status = "等待运行..."
         self.last_run_time = "无"
+        
+        # 调试通知配置
+        token = getattr(cfg, "pushplus_token", None)
+        if token:
+            logger.info(f"PushPlus 通知功能已启用, Token: {token[:4]}****")
+        else:
+            logger.warning("PushPlus Token 未配置，通知功能将失效")
 
-    def get_realtime_price_and_name(self, symbol_or_name):
+    def get_realtime_price_and_name(self, symbol_or_name, spot_df=None):
         """获取实时价格、股票名称、代码以及昨收价"""
         try:
             # 兼容代码或名称输入
             base_symbol = symbol_or_name.split('.')[0]
-            df = ak.stock_zh_a_spot_em()
+            
+            if spot_df is None:
+                df = ak.stock_zh_a_spot_em()
+            else:
+                df = spot_df
             
             row = df[df['代码'] == base_symbol]
             if row.empty:
@@ -351,8 +369,15 @@ class AutoTrader:
             sig_table.add_column("确定性", justify="right")
             sig_table.add_column("执行状态", justify="left")
 
-            # 优化：先处理卖出信号释放资金，再处理买入信号
+            # 优化：先处理卖出信号释放资金，整理并批量获取实时行情数据
             sorted_signals = sorted(best_signals, key=lambda x: 0 if x.get('action', '').lower() == 'sell' else 1)
+            
+            try:
+                logger.info("正在批量获取实时行情数据...")
+                spot_df = ak.stock_zh_a_spot_em()
+            except Exception as e:
+                logger.error(f"批量获取行情失败: {e}")
+                spot_df = None
 
             current_prices = {}
             for signal in sorted_signals:
@@ -364,7 +389,7 @@ class AutoTrader:
                 if not raw_symbol or has_opp != 'yes':
                     continue
                 
-                price, name, code, _, pct_chg = self.get_realtime_price_and_name(raw_symbol)
+                price, name, code, _, pct_chg = self.get_realtime_price_and_name(raw_symbol, spot_df=spot_df)
                 status = "[yellow]等待[/yellow]"
                 
                 if price:
@@ -375,20 +400,37 @@ class AutoTrader:
                              status = "[dim]跳过 (涨停无法买入)[/dim]"
                         elif pct_chg > 19.9: # 创业板/科创板涨停
                              status = "[dim]跳过 (涨停无法买入)[/dim]"
-                        elif self.portfolio.buy(code, price, trigger_time, name=name):
-                            status = "[green]✅ 已买入[/green]"
                         else:
-                            status = "[dim]跳过 (已持仓或资金不足)[/dim]"
+                            if self.portfolio.buy(code, price, trigger_time, name=name):
+                                status = "[green]✅ 已买入[/green]"
+                                # 获取成交后的持仓信息以显示数量
+                                holding = self.portfolio.data["holdings"].get(code, {})
+                                quantity = holding.get("quantity", 0)
+                                # 交易成功后发送通知
+                                logger.info(f"发送微信买入通知: {name}({code})")
+                                await send_pushplus_msg(f"✅ Contest 买入成交: {name}({code})", 
+                                                     f"时间: {trigger_time}<br>价格: {price}<br>数量: {quantity}<br>确定性: {score}%<br>原因: {signal.get('reason', 'AI Signal')}")
+                            else:
+                                status = "[dim]跳过 (已持仓或资金不足)[/dim]"
                     elif action == 'sell':
                         # 跌停板规则
                         if pct_chg < -9.9 and not (code.startswith('300') or code.startswith('688')):
                              status = "[dim]跳过 (跌停无法卖出)[/dim]"
                         elif pct_chg < -19.9:
                              status = "[dim]跳过 (跌停无法卖出)[/dim]"
-                        elif self.portfolio.sell(code, price, trigger_time, reason=signal.get('reason', 'AI Signal')):
-                            status = "[red]成交量 (已卖出)[/red]"
                         else:
-                            status = "[dim]跳过 (未持仓或T+1限制)[/dim]"
+                            # 卖出前先获取持仓数量
+                            holding = self.portfolio.data["holdings"].get(code, {})
+                            quantity = holding.get("quantity", 0)
+                            
+                            if self.portfolio.sell(code, price, trigger_time, reason=signal.get('reason', 'AI Signal')):
+                                status = "[red]成交量 (已卖出)[/red]"
+                                # 交易成功后发送通知
+                                logger.info(f"发送微信卖出通知: {name}({code})")
+                                await send_pushplus_msg(f"📉 Contest 卖出成交: {name}({code})", 
+                                                     f"时间: {trigger_time}<br>价格: {price}<br>数量: {quantity}<br>盈亏分析: {signal.get('reason', 'AI Signal')}")
+                            else:
+                                status = "[dim]跳过 (未持仓或T+1限制)[/dim]"
                 else:
                     status = "[red]❌ 获取价格失败[/red]"
 

@@ -13,9 +13,6 @@ fmp_key: ""
 #YOUR_FINNHUB_KEY
 finnhub_key: "" 
 
-# PushPlus Token (微信通知)
-pushplus_token: "7ee2ce810d8245b09098b666af3a002b"
-
 # ==================================================
 # LLM 配置说明 / LLM Configuration
 # ==================================================
@@ -59,26 +56,30 @@ pushplus_token: "7ee2ce810d8245b09098b666af3a002b"
 
 llm:
   provider: "openai"
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  #YOUR_DASHSCOPE_API_KEY
-  api_key: "sk-17dc875220c84b638dca836f67556efb"
-  model_name: "deepseek-v3.2"
+  # base_url: "https://api.deepseek.com"
+  base_url: "https://api.siliconflow.cn/v1"
+  #YOUR_DEEPSEEK_API_KEY
+  # api_key: "sk-83f506a9eecd4b71977ad2d07a8b2a81"
+  api_key: "sk-cknubmjzojfvdargfufqxthgywylfrdgxrddletgwaktidkd"
+  # model_name: "deepseek-chat"
+  model_name: "Pro/deepseek-ai/DeepSeek-V3.2"
 
 llm_thinking:
   provider: "openai"
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  #YOUR_DASHSCOPE_API_KEY
-  api_key: "sk-17dc875220c84b638dca836f67556efb"
-  model_name: "qwen3-max"
-  # 官方思考模式切换 / Enable Qwen thinking mode
-  enable_thinking: True 
+  # base_url: "https://api.deepseek.com"
+  base_url: "https://api.siliconflow.cn/v1"
+  #YOUR_DEEPSEEK_API_KEY
+  # api_key: "sk-83f506a9eecd4b71977ad2d07a8b2a81"
+  api_key: "sk-cknubmjzojfvdargfufqxthgywylfrdgxrddletgwaktidkd"
+  # model_name: "deepseek-reasoner"
+  model_name: "Pro/zai-org/GLM-4.7"
 
 vlm:
   provider: "openai"
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  #YOUR_DASHSCOPE_API_KEY
-  api_key: "sk-17dc875220c84b638dca836f67556efb"
-  model_name: "qwen3-vl-plus"
+  base_url: "https://api.siliconflow.cn/v1"
+  #YOUR_STEPFUN_API_KEY
+  api_key: "sk-cknubmjzojfvdargfufqxthgywylfrdgxrddletgwaktidkd"
+  model_name: "Qwen/Qwen3-VL-32B-Instruct"
 
 
 data_agents_config:

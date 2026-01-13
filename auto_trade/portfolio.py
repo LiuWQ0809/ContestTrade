@@ -49,7 +49,7 @@ class VirtualPortfolio:
         transfer = revenue * self.TRANSFER_FEE_RATE
         return round(commission + stamp_duty + transfer, 2)
 
-    def buy(self, symbol, price, time_str, name="N/A", amount=5000):
+    def buy(self, symbol, price, time_str, name="N/A", amount=10000):
         if symbol in self.data["holdings"]:
             return False
         

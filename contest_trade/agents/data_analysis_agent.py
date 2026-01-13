@@ -105,6 +105,7 @@ class DataAnalysisAgentState(TypedDict):
     metadata: Dict[str, Any]
     data_df: pd.DataFrame
     summary: str
+    previous_summary: str
     processing_stats: Dict[str, Any]
     batch_details: List[Dict[str, Any]]
     result: DataAnalysisAgentOutput
@@ -201,33 +202,115 @@ class DataAnalysisAgent:
             logger.info(f"Data does not exist for {state['trigger_time']}, recomputing factor")
             return "yes"
 
-    async def _preprocess(self, state: DataAnalysisAgentState) -> DataAnalysisAgentState:
-        """Preprocess the document data"""
+    def _get_previous_daily_factor(self, current_trigger_time: str) -> Dict[str, Any]:
+        """Find the latest factor file from earlier today"""
         try:
-            data_dfs =[]
-            for source in self.data_source_list:
-                logger.info(f"Getting data from {source.__class__.__name__}...")
-                df = await source.get_data(state["trigger_time"])
-                required_columns = ['title', 'content', 'pub_time']
+            current_dt = datetime.strptime(current_trigger_time, "%Y-%m-%d %H:%M:%S")
+            day_str = current_dt.strftime("%Y-%m-%d")
+            
+            # List all JSON files for today
+            files = list(self.factor_dir.glob(f"{day_str}*.json"))
+            if not files:
+                return None
+                
+            # Filter and sort files to find the one just before current_trigger_time
+            current_file_name = f'{current_trigger_time.replace(" ", "_").replace(":", "-")}.json'
+            prev_files = [f for f in files if f.name < current_file_name]
+            
+            if not prev_files:
+                return None
+                
+            # Sort by name (which is timestamped)
+            prev_files.sort()
+            latest_prev_file = prev_files[-1]
+            
+            with open(latest_prev_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error getting previous daily factor: {e}")
+            return None
+
+    async def _preprocess(self, state: DataAnalysisAgentState) -> DataAnalysisAgentState:
+        """Preprocess the document data with deduplication and incremental filtering"""
+        try:
+            # 1. Load previous context for the same day
+            prev_factor = self._get_previous_daily_factor(state["trigger_time"])
+            last_processed_time = "2000-01-01 00:00:00" # Default to far past
+            state["previous_summary"] = ""
+            
+            if prev_factor:
+                last_processed_time = prev_factor.get("trigger_time", last_processed_time)
+                state["previous_summary"] = prev_factor.get("context_string", "")
+                logger.info(f"Incremental processing enabled. Last processed time: {last_processed_time}")
+
+            # 并发获取所有数据源的数据
+            logger.info(f"🚀 正在并发获取 {len(self.data_source_list)} 个数据源的数据...")
+            
+            async def get_source_data(source):
+                try:
+                    logger.info(f"Getting data from {source.__class__.__name__}...")
+                    return await source.get_data(state["trigger_time"])
+                except Exception as e:
+                    logger.error(f"Error getting data from {source.__class__.__name__}: {e}")
+                    return pd.DataFrame()
+
+            tasks = [get_source_data(source) for source in self.data_source_list]
+            dfs = await asyncio.gather(*tasks)
+            
+            data_dfs = []
+            required_columns = ['title', 'content', 'pub_time']
+            for i, df in enumerate(dfs):
+                source_name = self.data_source_list[i].__class__.__name__
+                if df.empty:
+                    continue
+                    
+                # Check for missing columns
+                missing_cols = [col for col in required_columns if col not in df.columns]
+                if missing_cols:
+                    logger.warning(f"Source {source_name} missing columns: {missing_cols}")
+                    continue
+
                 df = df[df['title'].str.strip() != '']
                 df = df[df['content'].str.strip() != '']
                 df = df[required_columns]
                 data_dfs.append(df)
-            data_df = pd.concat(data_dfs, ignore_index=True)
-            data_df['id'] = range(1, len(data_df) + 1)
-            state["data_df"] = data_df
-
-            total_docs = len(data_df)
             
-            # 优化：根据文档数量动态调整batch_count
-            # 如果文档很少，没必要分多批次增加API调用次数
+            if not data_dfs:
+                state["data_df"] = pd.DataFrame(columns=['title', 'content', 'pub_time', 'id'])
+                state["batch_info"] = {'batch_count': 0, 'total_data': 0}
+                return state
+
+            data_df = pd.concat(data_dfs, ignore_index=True)
+            
+            # 2. Deduplication across all sources by title
+            original_count = len(data_df)
+            data_df = data_df.drop_duplicates(subset=['title'], keep='first')
+            dedup_count = original_count - len(data_df)
+            if dedup_count > 0:
+                logger.debug(f"Deduplicated {dedup_count} documents across sources.")
+
+            # 3. Incremental Filtering: Filter out previously processed news
+            # Some sources might have slightly different time formats, try to normalize
+            data_df['pub_time_dt'] = pd.to_datetime(data_df['pub_time'], errors='coerce')
+            last_processed_dt = pd.to_datetime(last_processed_time)
+            
+            incremental_df = data_df[data_df['pub_time_dt'] > last_processed_dt].copy()
+            new_docs_count = len(incremental_df)
+            
+            logger.info(f"Summary for {state['trigger_time']}: Total={original_count}, Deduped={len(data_df)}, Increment={new_docs_count}")
+            
+            incremental_df = incremental_df.drop(columns=['pub_time_dt'])
+            incremental_df['id'] = range(1, len(incremental_df) + 1)
+            state["data_df"] = incremental_df
+
+            total_docs = len(incremental_df)
+            
+            # Adjust batch count for incremental data
             max_batch_count = self.config.batch_count
             batch_count = max_batch_count
             
-            # 如果文档总数小于 title_selection_per_batch 的2倍，合并为一个批次
             if total_docs <= self.config.title_selection_per_batch * 2:
-                batch_count = 1
-            # 否则，确保每个batch至少有一定数量的文档
+                batch_count = 1 if total_docs > 0 else 0
             else:
                 suggested_batch_count = total_docs // self.config.title_selection_per_batch
                 batch_count = max(1, min(max_batch_count, suggested_batch_count))
@@ -244,6 +327,7 @@ class DataAnalysisAgent:
             }
         except Exception as e:
             logger.error(f"Error preprocessing data: {e}")
+            logger.error(traceback.format_exc())
             return state
         logger.info("preprocess success")
         return state
@@ -297,55 +381,59 @@ class DataAnalysisAgent:
     
 
     async def _final_summary(self, state: DataAnalysisAgentState) -> DataAnalysisAgentState:
-        """Merge multiple batch summaries into final document factor"""
+        """Merge multiple batch summaries into final document factor with cumulative updates"""
         try:
-            if not state["batch_results"]:
-                return "No valid document summaries retrieved"
+            # 1. Handle no new news case
+            valid_results = [r for r in state["batch_results"] if r.get("success") and r.get("summary")]
             
-            # Merge all batch summaries
-            combined_summary = "\n\n".join([
-                f"Batch {i+1} Documents:\n{result.get('summary', '')}" 
-                for i, result in enumerate(state["batch_results"])
-            ])
-
-            combined_summary_raw = "\n\n".join([
-                f"Documents:\n{result.get('summary', '')}" 
-                for i, result in enumerate(state["batch_results"])
-            ])
-
-            if len(combined_summary_raw) <= self.config.final_target_tokens and not state["bias_goal"]:
-                final_summary = combined_summary_raw
-            else:
-                # Adjust prompt based on whether there's a bias goal
-                if state["bias_goal"]:
-                    goal_instruction = f"Integrate information around goal '{state['bias_goal']}'"
-                    summary_focus = "Highlight important facts related to the goal"
-                    final_description = "Final Goal-Oriented Information Summary"
-                else:
-                    goal_instruction = "Objectively integrate market information"
-                    summary_focus = "Maintain objectivity and accuracy of information"
-                    final_description = "Final Market Information Summary"
-                
-                prompt = prompt_for_data_analysis_merge_summary.format(
+            if not valid_results:
+                logger.info("No new batch results, using previous summary.")
+                state["summary"] = state.get("previous_summary", "No market news available.")
+                state["result"] = DataAnalysisAgentOutput(
+                    agent_name=self.config.agent_name,
                     trigger_time=state["trigger_time"],
-                    goal_instruction=goal_instruction,
-                    combined_summary=combined_summary,
-                    summary_focus=summary_focus,
-                    final_description=final_description,
-                    final_target_tokens=self.config.final_target_tokens,
-                    language=cfg.system_language
+                    source_list=state["source_list"],
+                    bias_goal=state["bias_goal"],
+                    context_string=state["summary"],
+                    references=[],
+                    batch_summaries=[]
                 )
+                return state
             
-                messages = [{"role": "user", "content": prompt}]
-                response = await GLOBAL_LLM.a_run(
-                        messages, thinking=False, verbose=False, max_tokens=self.config.final_target_tokens)
-                final_summary = response.content.strip()
+            # 2. Prepare combined input for merging
+            new_combined_summary = "\n\n".join([
+                f"Batch {i+1} New Documents:\n{result.get('summary', '')}" 
+                for i, result in enumerate(state["batch_results"])
+            ])
+
+            # Use LLM to merge previous context with new summaries
+            goal_instruction = f"Integrate goal '{state['bias_goal']}'" if state["bias_goal"] else "Objectively integrate market information"
+            summary_focus = "Maintain continuity with previous context and highlight NEW important developments"
             
-            # Collect all references from batch summaries and final summary
+            # Construct the combined context for the merge prompt
+            merge_context = new_combined_summary
+            if state.get("previous_summary"):
+                merge_context = f"--- PREVIOUS SUMMARY ---\n{state['previous_summary']}\n\n--- NEW UPDATES ---\n{new_combined_summary}"
+
+            prompt = prompt_for_data_analysis_merge_summary.format(
+                trigger_time=state["trigger_time"],
+                goal_instruction=goal_instruction,
+                combined_summary=merge_context,
+                summary_focus=summary_focus,
+                final_description="Cumulative Market Information Summary",
+                final_target_tokens=self.config.final_target_tokens,
+                language=cfg.system_language
+            )
+        
+            messages = [{"role": "user", "content": prompt}]
+            response = await GLOBAL_LLM.a_run(
+                    messages, thinking=False, verbose=False, max_tokens=self.config.final_target_tokens)
+            final_summary = response.content.strip()
+            
+            # 3. Collect references
             all_ref_ids = set()
             batch_summaries = []
             
-            # Collect references from each batch
             for batch_result in state["batch_results"]:
                 if batch_result.get("success") and batch_result.get("summary"):
                     batch_summaries.append({
@@ -353,21 +441,17 @@ class DataAnalysisAgent:
                         "summary": batch_result["summary"],
                         "references": batch_result.get("references", [])
                     })
-                    # Add batch reference IDs
                     for ref in batch_result.get("references", []):
                         if isinstance(ref, dict) and "id" in ref:
                             all_ref_ids.add(str(ref["id"]))
             
-            # Add final summary references
             final_ref_ids = re.findall(r'\[(\d+)\]', final_summary)
             all_ref_ids.update(final_ref_ids)
             
-            # Get all unique references - convert IDs to integers for DataFrame filtering
             try:
                 ref_ids_int = [int(ref_id) for ref_id in all_ref_ids if ref_id.isdigit()]
                 references_df = state["data_df"][state["data_df"]["id"].isin(ref_ids_int)]
-            except (ValueError, TypeError):
-                # If conversion fails, try string matching
+            except:
                 references_df = state["data_df"][state["data_df"]["id"].astype(str).isin(all_ref_ids)]
             references = references_df.to_dict(orient="records")
             
@@ -383,9 +467,8 @@ class DataAnalysisAgent:
             )
             return state
         except Exception as e:
-            print(f"Error final summary: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error in final summary merge: {e}")
+            logger.error(traceback.format_exc())
             return state
 
     
@@ -568,6 +651,7 @@ class DataAnalysisAgent:
             metadata={},
             data_df=pd.DataFrame(),
             summary="",
+            previous_summary="",
             processing_stats={},
             batch_details=[],
             result=None
