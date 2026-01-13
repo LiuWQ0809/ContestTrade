@@ -2,7 +2,7 @@
 # 增加本金快捷脚本
 
 PYTHON_EXE="/home/liuwq/miniconda3/envs/contesttrade/bin/python"
-SCRIPT_PATH="/home/liuwq/work/ContestTrade/cli/add_cash.py"
+SCRIPT_PATH="/home/liuwq/work/ContestTrade/scripts/add_cash.py"
 
 if [ -z "$1" ]; then
     echo "用法: ./add_cash.sh <金额>"
