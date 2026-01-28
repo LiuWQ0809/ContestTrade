@@ -245,6 +245,7 @@ class SimpleTradeCompany:
             holdings_str = ", ".join([f"{h.get('name', k)}({k})" for k, h in holdings.items()]) if holdings else "无"
             account_context = f"\n<account_info>\n当前可用现金: {cash:.2f}\n当前持仓股票: {holdings_str}\n累计已支付交易费: {total_fees:.2f}\n"
             account_context += "交易费率提示: A股交易存在成本 (佣金0.03%[最低5元], 卖出额外印花税0.05%, 过户费等)。单笔买入5000元约产生6.5元费用，卖出约产生9元费用。请避免买入预期涨幅无法覆盖交易成本的股票。\n"
+            account_context += "任务指令: 请务必审视当前持仓。如果持仓逻辑依然成立且表现较好，建议 HOLD；如果逻辑失效或有明显更好的替代机会，建议 SELL。\n"
             if cash < 1000: # 假设 1000 为起投金额
                 account_context += "提示: 当前可用资金极低。如果你发现必须买入的绝佳机会，你必须同时识别并建议卖出（SELL）当前持仓中表现较差的股票以释放资金，否则买入动作指令将会因资金不足而失败。\n"
             account_context += "</account_info>\n"
@@ -366,6 +367,9 @@ class SimpleTradeCompany:
             # 解析probability
             probability = extract_tag("probability", signal_block, "0%")
             
+            # 解析hold_period
+            hold_period = extract_tag("hold_period", signal_block, "1D")
+            
             # 修正symbol信息
             if symbol_name != "N/A" or symbol_code != "N/A":
                 symbol_name, symbol_code = GLOBAL_MARKET_MANAGER.fix_symbol_code("CN-Stock", symbol_name, symbol_code)
@@ -379,6 +383,7 @@ class SimpleTradeCompany:
                 "evidence_list": evidence_list,
                 "limitations": limitations,
                 "probability": probability,
+                "hold_period": hold_period
             }
         except Exception as e:
             logger.error(f"Error parsing single signal block: {e}")

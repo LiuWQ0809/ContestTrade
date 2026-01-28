@@ -208,22 +208,24 @@ prompt_for_research_invest_task = """
 As a professional researcher with specific belief, you need to find opportunities in the market today. You need to submit up to 5 critical analysis suggestions to the investor.
 
 Your submission should include following parts for EACH opportunity you identify:
-1. Does valuable opportunity exist in the market today?
-2. Symbol Information of the opportunity
+1. Does valuable opportunity exist in the market today? (Include re-evaluation of current holdings if they are still valuable or need to be sold. Consider the overall market sentiment and A-share market mood provided in the background).
+2. Symbol Information of the opportunity.
 3. Evidence list you find to prove the opportunity is valuable. Judger will use these evidences to judge the opportunity is valuable or not.
 4. Based on the evidence_list, you need to give a probability to this opportunity.
 5. You need to give a limitation to your suggestion, such as risk, etc. No limitation will be rejected.
 6. You should provide between 1 to 5 opportunity suggestions based on what you find in the market. Only submit signals for opportunities you genuinely identify.
-7. If accepted, your suggestions will execute when the market opens and hold for one day. So you need to focus on short-term information.
-8. Each signal should be independent and focus on different stocks or strategies.
-9. If you cannot find 5 valuable opportunities, submit fewer high-quality signals rather than padding with low-quality ones.
+7. Focus on net profit: You MUST estimate whether the potential price movement can cover transaction costs (approx. 0.1-0.2% total for round trip + price slippage). Only suggest BUY if: (Expected Return - Transaction Cost) > 0.
+8. Align with Market Sentiment: Ensure your suggestions are consistent with the overall market mood. If the market sentiment is "Panic" or "Bearish", be extremely conservative with BUY signals and prioritize defensive or counter-trend opportunities.
+9. Suggest a hold period based on the event's conviction and nature: "1D" (1 day), "3D" (3 days), "1W" (1 week), or "Long" (Long-term).
+9. Each signal should be independent and focus on different stocks or strategies.
+10. If you cannot find 5 valuable opportunities, submit fewer high-quality signals rather than padding with low-quality ones.
 """
 
 prompt_for_research_invest_output_format = """
 <signals>
 <signal>
 <has_opportunity>xxx</has_opportunity>  # yes or no
-<action>xxx</action>  # buy or sell
+<action>xxx</action>  # buy, sell or hold
 <symbol_code>xxx</symbol_code>     # such as 600519.SH or TSLA
 <symbol_name>xxx</symbol_name>  # such as 贵州茅台 or tesla
 <evidence_list>        # no more than 20 evidences
@@ -237,6 +239,7 @@ prompt_for_research_invest_output_format = """
 ...
 </limitations>
 <probability>xxx</probability>  # 0-100
+<hold_period>xxx</hold_period>  # 1D, 3D, 1W, or Long
 </signal>
 <!-- Repeat <signal>...</signal> block for each opportunity you identify, up to 5 signals -->
 <!-- Only include signals for genuine opportunities you find in the market -->

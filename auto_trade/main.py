@@ -22,6 +22,7 @@ from contest_trade.main import SimpleTradeCompany
 from auto_trade.portfolio import VirtualPortfolio
 from contest_trade.utils.notification import send_pushplus_msg
 from contest_trade.config.config import cfg
+from contest_trade.utils.akshare_utils import get_stock_zh_a_spot_safe
 
 # Setup logging
 LOG_DIR = PROJECT_ROOT / "agents_workspace" / "logs"
@@ -125,10 +126,13 @@ class AutoTrader:
             base_symbol = symbol_or_name.split('.')[0]
             
             if spot_df is None:
-                df = ak.stock_zh_a_spot_em()
+                df = get_stock_zh_a_spot_safe()
             else:
                 df = spot_df
             
+            if df.empty or '代码' not in df.columns:
+                return None, None, None, None, 0
+
             row = df[df['代码'] == base_symbol]
             if row.empty:
                 row = df[df['名称'] == symbol_or_name]
@@ -154,7 +158,7 @@ class AutoTrader:
         
         # 批量获取行情
         try:
-            spot_df = ak.stock_zh_a_spot_em()
+            spot_df = get_stock_zh_a_spot_safe()
         except:
             spot_df = None
             
@@ -179,11 +183,14 @@ class AutoTrader:
             cur_price = info.get("current_price", buy_price)
             pre_close = cur_price # 默认值
             
-            if spot_df is not None:
+            if spot_df is not None and not spot_df.empty and '代码' in spot_df.columns:
                 row = spot_df[spot_df['代码'] == symbol.split('.')[0]]
                 if not row.empty:
-                    cur_price = float(row.iloc[0]['最新价'])
-                    pre_close = float(row.iloc[0]['昨收'])
+                    try:
+                        cur_price = float(row.iloc[0]['最新价'])
+                        pre_close = float(row.iloc[0]['昨收'])
+                    except (ValueError, KeyError):
+                        pass
 
             # 判断是否为今日买入
             buy_date = info["buy_time"].split(' ')[0]
@@ -283,7 +290,7 @@ class AutoTrader:
                 
                 # 我们尝试重新获取昨收价来计算精确的 Day PnL Contribution
                 r_pre_close = s_buy_price # Fallback
-                if spot_df is not None:
+                if spot_df is not None and not spot_df.empty and '代码' in spot_df.columns:
                      r_row = spot_df[spot_df['代码'] == s_code.split('.')[0]]
                      if not r_row.empty:
                         r_pre_close = float(r_row.iloc[0]['昨收'])
@@ -348,6 +355,9 @@ class AutoTrader:
 
         console.print(f"\n[bold blue]🚀 开启新一轮市场评估 - 触发时间: {trigger_time}[/bold blue]")
         
+        # 打印当前支持的交易板块信息
+        console.print("[dim]板块策略: ✅ 主板(600/000) | ❌ 创业板(300) | ❌ 科创板(688)[/dim]")
+
         try:
             # 资金前置检查
             available_cash = self.portfolio.data.get('cash', 0)
@@ -362,6 +372,41 @@ class AutoTrader:
             final_state = await self.company.run_company(trigger_time, portfolio_info=self.portfolio.data)
             best_signals = final_state.get('step_results', {}).get('contest', {}).get('best_signals', [])
             
+            # --- 1.1 追踪止损检查 (Trailing Stop) & 1.2 不支持板块清理 ---
+            try:
+                logger.info("正在检查持仓 (追踪止损 & 板块合规性)...")
+                spot_df = get_stock_zh_a_spot_safe()
+            except Exception as e:
+                logger.error(f"批量获取行情失败: {e}")
+                spot_df = None
+
+            for held_code in list(self.portfolio.data["holdings"].keys()):
+                price, name, _, _, _ = self.get_realtime_price_and_name(held_code, spot_df)
+                
+                # Check 1: Unsupported Boards (Auto Sell)
+                if held_code.startswith(('300', '688')):
+                    logger.info(f"发现不支持板块的持仓 {name}({held_code})，触发自动清理卖出。")
+                    best_signals.insert(0, {
+                        'symbol_code': held_code,
+                        'symbol_name': name,
+                        'action': 'sell',
+                        'probability': '100%',
+                        'reason': 'Auto Clean: Unsupported Board',
+                        'has_opportunity': 'yes'
+                    })
+                    continue # Skip to next holding
+
+                # Check 2: Trailing Stop
+                elif price and self.portfolio.check_trailing_stop(held_code, price):
+                    best_signals.insert(0, {
+                        'symbol_code': held_code,
+                        'symbol_name': name,
+                        'action': 'sell',
+                        'probability': '100%',
+                        'reason': 'Trailing Stop Triggered',
+                        'has_opportunity': 'yes'
+                    })
+
             # 2. 处理信号
             sig_table = Table(title="🔍 AI 交易信号汇总", box=box.SIMPLE, header_style="bold cyan")
             sig_table.add_column("股票", justify="left")
@@ -369,16 +414,15 @@ class AutoTrader:
             sig_table.add_column("确定性", justify="right")
             sig_table.add_column("执行状态", justify="left")
 
+            # --- 换手率限制 (Turnover Constraint) ---
+            # 每天限额：总资产的 50%
+            total_value = self.portfolio.data["cash"] + sum([h["quantity"] * h.get("current_price", h["buy_price"]) for h in self.portfolio.data["holdings"].values()])
+            turnover_limit = total_value * 0.5
+            current_turnover = 0
+
             # 优化：先处理卖出信号释放资金，整理并批量获取实时行情数据
             sorted_signals = sorted(best_signals, key=lambda x: 0 if x.get('action', '').lower() == 'sell' else 1)
             
-            try:
-                logger.info("正在批量获取实时行情数据...")
-                spot_df = ak.stock_zh_a_spot_em()
-            except Exception as e:
-                logger.error(f"批量获取行情失败: {e}")
-                spot_df = None
-
             current_prices = {}
             for signal in sorted_signals:
                 raw_symbol = signal.get('symbol_name')
@@ -395,14 +439,24 @@ class AutoTrader:
                 if price:
                     current_prices[code] = price
                     if action == 'buy':
+                        # 换手率检查
+                        estimated_trade_value = 10000 
+                        if current_turnover + estimated_trade_value > turnover_limit:
+                            status = "[yellow]跳过 (超出换手率限制)[/yellow]"
+                        
+                        # 临时限制：账户权限不足，跳过创业板(300)和科创板(688)买入
+                        elif code.startswith('300') or code.startswith('688'):
+                            status = "[dim]跳过 (无权限:创业板/科创板)[/dim]"
+                            
                         # 涨停板规则: 涨幅超过 9.9% 且非创业板/科创板，通常很难买入
-                        if pct_chg > 9.9 and not (code.startswith('300') or code.startswith('688')):
+                        elif pct_chg > 9.9 and not (code.startswith('300') or code.startswith('688')):
                              status = "[dim]跳过 (涨停无法买入)[/dim]"
                         elif pct_chg > 19.9: # 创业板/科创板涨停
                              status = "[dim]跳过 (涨停无法买入)[/dim]"
                         else:
                             if self.portfolio.buy(code, price, trigger_time, name=name):
                                 status = "[green]✅ 已买入[/green]"
+                                current_turnover += estimated_trade_value
                                 # 获取成交后的持仓信息以显示数量
                                 holding = self.portfolio.data["holdings"].get(code, {})
                                 quantity = holding.get("quantity", 0)
@@ -422,9 +476,15 @@ class AutoTrader:
                             # 卖出前先获取持仓数量
                             holding = self.portfolio.data["holdings"].get(code, {})
                             quantity = holding.get("quantity", 0)
+                            trade_value = quantity * price
                             
-                            if self.portfolio.sell(code, price, trigger_time, reason=signal.get('reason', 'AI Signal')):
+                            # 换手率检查 (止损信号除外)
+                            if signal.get('reason') != 'Trailing Stop Triggered' and current_turnover + trade_value > turnover_limit:
+                                status = "[yellow]跳过 (超出换手率限制)[/yellow]"
+                            elif self.portfolio.sell(code, price, trigger_time, reason=signal.get('reason', 'AI Signal')):
                                 status = "[red]成交量 (已卖出)[/red]"
+                                if signal.get('reason') != 'Trailing Stop Triggered':
+                                    current_turnover += trade_value
                                 # 交易成功后发送通知
                                 logger.info(f"发送微信卖出通知: {name}({code})")
                                 await send_pushplus_msg(f"📉 Contest 卖出成交: {name}({code})", 

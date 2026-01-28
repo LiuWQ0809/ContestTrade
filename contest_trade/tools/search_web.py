@@ -176,16 +176,19 @@ async def search_web(query: str, topk: int = 3, trigger_time: str = None):
         logger.warning("No search API keys (SERP_API_KEY, BOCHA_API_KEY) are configured.")
         return ""
 
-    # Priority 1: Try Google Search
-    if serp_api_key:
+    # Priority 1: Try Bocha (Domestic Stable API)
+    # The user environment cannot access Google, so we switch priorities:
+    # 1. Bocha (Domestic) -> 2. Google (SerpAPI) fallback
+    
+    if bocha_api_key:
+        logger.info(f"Attempting search with Bocha AI (Primary for CN region) for query: '{query}'")
+        response = ask_bocha(payload, bocha_api_key)
+
+    # Priority 2: Fallback to Google if Bocha fails and Key exists
+    if not response and serp_api_key:
+        logger.warning("Bocha search failed or was not configured. Falling back to Google (SerpAPI).")
         logger.info(f"Attempting search with Google (SerpAPI) for query: '{query}'")
         response = ask_google(payload, serp_api_key)
-    
-    # Priority 2: Fallback to Bocha if the first attempt fails
-    if not response and bocha_api_key:
-        logger.warning("Google search failed or was not configured. Falling back to Bocha AI.")
-        logger.info(f"Attempting search with Bocha AI for query: '{query}'")
-        response = ask_bocha(payload, bocha_api_key)
     
     if not response:
         logger.warning("All configured search providers failed to return results.")

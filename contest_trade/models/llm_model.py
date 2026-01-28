@@ -42,7 +42,7 @@ class ProviderType(Enum):
 
 class LLMModelConfig:
     def __init__(self, provider: str, model_name: str, api_key: str = None, base_url: str = None,
-                 max_retries: int = 3, retry_delay: float = 20.0, timeout: float = 60.0, 
+                 max_retries: int = 3, retry_delay: float = 20.0, timeout: float = 90.0, 
                  extra_headers: dict = None, proxys: dict = None, **kwargs):
         self.provider = provider
         self.model_name = model_name
@@ -575,7 +575,7 @@ class LLMModel(BaseAgentModel):
         if retry_delay is None:
             retry_delay = getattr(self, 'config', LLMModelConfig("", "", "")).retry_delay
         if timeout is None:
-            timeout = 60
+            timeout = getattr(self, 'config', LLMModelConfig("", "", "")).timeout
 
         for attempt in range(max_retries + 1):
             try:

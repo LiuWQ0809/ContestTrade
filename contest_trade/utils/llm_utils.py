@@ -1,5 +1,10 @@
 import tiktoken
-encoding = tiktoken.get_encoding("cl100k_base")
+try:
+    encoding = tiktoken.get_encoding("cl100k_base")
+except Exception:
+    class DummyEncoding:
+        def encode(self, text): return [0] * (len(text) // 2 + 1)
+    encoding = DummyEncoding()
 
 
 def count_tokens(text):

@@ -59,6 +59,15 @@ class HotMoneyAkshare(DataSourceBase):
             if df.empty:
                 logger.warning(f"{trade_date} 无涨停数据")
                 return pd.DataFrame()
+                
+            # --- 过滤不支持的板块 (创业板300/科创板688) ---
+            if '代码' in df.columns:
+                original_len = len(df)
+                # 只保留非 300 和 688 开头的股票
+                df = df[~df['代码'].astype(str).str.startswith(('300', '688'))].copy()
+                filtered_len = len(df)
+                if original_len != filtered_len:
+                    logger.info(f"已过滤 {original_len - filtered_len} 只创业板/科创板股票 (涨停池)")
             
             logger.info(f"获取 {trade_date} 涨停数据成功，{len(df)} 条记录")
             return df
@@ -79,6 +88,14 @@ class HotMoneyAkshare(DataSourceBase):
             if df.empty:
                 logger.warning(f"{trade_date} 无跌停数据")
                 return pd.DataFrame()
+            
+            # --- 过滤不支持的板块 (创业板300/科创板688) ---
+            if '代码' in df.columns:
+                original_len = len(df)
+                df = df[~df['代码'].astype(str).str.startswith(('300', '688'))].copy()
+                filtered_len = len(df)
+                if original_len != filtered_len:
+                    logger.info(f"已过滤 {original_len - filtered_len} 只创业板/科创板股票 (跌停池)")
             
             logger.info(f"获取 {trade_date} 跌停数据成功，{len(df)} 条记录")
             return df
@@ -105,6 +122,14 @@ class HotMoneyAkshare(DataSourceBase):
                 logger.warning(f"{start_date}到{end_date} 无龙虎榜数据")
                 return pd.DataFrame()
             
+            # --- 过滤不支持的板块 (创业板300/科创板688) ---
+            if '代码' in df.columns:
+                original_len = len(df)
+                df = df[~df['代码'].astype(str).str.startswith(('300', '688'))].copy()
+                filtered_len = len(df)
+                if original_len != filtered_len:
+                    logger.info(f"已过滤 {original_len - filtered_len} 只创业板/科创板股票 (龙虎榜)")
+
             logger.info(f"获取 {start_date}到{end_date} 龙虎榜数据成功，{len(df)} 条记录")
             return df
             
@@ -130,6 +155,14 @@ class HotMoneyAkshare(DataSourceBase):
                 logger.warning(f"{start_date}到{end_date} 无龙虎榜机构数据")
                 return pd.DataFrame()
             
+            # --- 过滤不支持的板块 (创业板300/科创板688) ---
+            if '代码' in df.columns:
+                original_len = len(df)
+                df = df[~df['代码'].astype(str).str.startswith(('300', '688'))].copy()
+                filtered_len = len(df)
+                if original_len != filtered_len:
+                    logger.info(f"已过滤 {original_len - filtered_len} 只创业板/科创板股票 (机构明细)")
+
             logger.info(f"获取 {start_date}到{end_date} 龙虎榜机构数据成功，{len(df)} 条记录")
             return df
             
