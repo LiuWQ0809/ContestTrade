@@ -2,7 +2,7 @@
 set -e
 
 # ContestTrade Simplified Starter
-ENV_NAME="contesttrade"
+ENV_NAME="ct"
 
 # Find Conda
 CONDA_PATH=$(command -v conda || true)

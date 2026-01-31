@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from loguru import logger
 import akshare as ak
@@ -29,10 +30,20 @@ LOG_DIR = PROJECT_ROOT / "agents_workspace" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_PATH = LOG_DIR / "auto_trade.log"
 
-def is_market_open(dt=None):
-    """判断是否在 A 股交易时间内 (9:30-11:30, 13:00-15:00)"""
+BEIJING_TZ = ZoneInfo("Asia/Shanghai")
+
+def _to_beijing(dt: datetime.datetime | None) -> datetime.datetime:
+    """Convert naive/local time to Asia/Shanghai; keep aware times in Beijing."""
     if dt is None:
-        dt = datetime.datetime.now()
+        return datetime.datetime.now().astimezone(BEIJING_TZ)
+    if dt.tzinfo is None:
+        # Assume local timezone for naive datetime, then convert to Beijing
+        return dt.astimezone(BEIJING_TZ)
+    return dt.astimezone(BEIJING_TZ)
+
+def is_market_open(dt=None):
+    """判断是否在 A 股交易时间内 (9:30-11:30, 13:00-15:00, 北京时间)"""
+    dt = _to_beijing(dt)
     
     # 检查周六周日
     if dt.weekday() >= 5:
@@ -194,7 +205,7 @@ class AutoTrader:
 
             # 判断是否为今日买入
             buy_date = info["buy_time"].split(' ')[0]
-            cur_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            cur_date = _to_beijing(None).strftime("%Y-%m-%d")
             is_new_buy = (buy_date == cur_date)
 
             buy_fee = info.get("buy_fee", 0.0)
@@ -246,7 +257,7 @@ class AutoTrader:
         sold_table.add_column("交易税费", justify="right")
         sold_table.add_column("卖出原因", justify="center")
 
-        cur_date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        cur_date_str = _to_beijing(None).strftime("%Y-%m-%d")
         history = self.portfolio.data.get("history", [])
         
         has_sold_today = False
@@ -339,7 +350,7 @@ class AutoTrader:
              console.print(sold_table)
 
     async def run_once(self):
-        now_dt = datetime.datetime.now()
+        now_dt = _to_beijing(None)
         rounded_minute = (now_dt.minute // 5) * 5
         trigger_time = now_dt.replace(minute=rounded_minute, second=0, microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
         
@@ -542,13 +553,13 @@ class AutoTrader:
         ))
 
         # 启动时立即运行一次初始评估
-        weekday = datetime.datetime.now().weekday()
+        weekday = _to_beijing(None).weekday()
         if weekday < 5:
             console.print("[bold yellow]🚀 启动完成，正在执行首次市场评估...[/bold yellow]")
             await self.run_once()
 
         while True:
-            now = datetime.datetime.now()
+            now = _to_beijing(None)
             now_str = now.strftime("%H:%M")
             weekday = now.weekday() # 0-4 is Mon-Fri
             

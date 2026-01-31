@@ -63,8 +63,8 @@ git clone https://github.com/FinStep-AI/ContestTrade.git
 cd ContestTrade
 
 # 2. (推荐) 创建并激活虚拟环境
-conda create -n contesttrade python=3.10
-conda activate contesttrade
+conda create -n ct python=3.10
+conda activate ct
 
 # 3. 安装项目依赖
 pip install -r requirements.txt

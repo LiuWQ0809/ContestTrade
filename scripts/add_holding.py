@@ -3,13 +3,34 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+def _init_portfolio_data():
+    return {
+        "cash": 20000.0,    # 初始资金 2万
+        "holdings": {},
+        "history": [],
+        "daily_stats": [],
+        "total_fees": 0.0
+    }
+
+def _ensure_portfolio(portfolio_path: Path) -> bool:
+    if portfolio_path.exists():
+        return True
+    try:
+        portfolio_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(portfolio_path, "w", encoding="utf-8") as f:
+            json.dump(_init_portfolio_data(), f, ensure_ascii=False, indent=4)
+        print(f"ℹ️ 未找到账户文件，已初始化: {portfolio_path}")
+        return True
+    except Exception as e:
+        print(f"Error: 无法初始化账户文件 {portfolio_path}: {e}")
+        return False
+
 def add_holding(symbol: str, price: float, quantity: int, name: str = None):
     # 定位 portfolio.json 路径
     project_root = Path(__file__).parent.parent.resolve()
     portfolio_path = project_root / "agents_workspace" / "portfolio.json"
     
-    if not portfolio_path.exists():
-        print(f"Error: 找不到账户文件 {portfolio_path}")
+    if not _ensure_portfolio(portfolio_path):
         return
 
     try:

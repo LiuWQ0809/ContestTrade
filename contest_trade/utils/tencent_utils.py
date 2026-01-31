@@ -1,18 +1,71 @@
 
+import json
 import requests
 import pandas as pd
 import concurrent.futures
 import time
+from datetime import datetime
 from akshare.utils import demjson
 import akshare as ak
 from loguru import logger
 import math
+from pathlib import Path
 from typing import List, Dict
 
 class TencentUtils:
     _code_cache = []
     _code_cache_time = 0
-    _cache_duration = 3600 * 4  # Cache codes for 4 hours (trading session)
+    _market_open_hour = 9
+    _market_open_minute = 30
+    _cache_dir = Path(__file__).parent / "cache"
+    _cache_file = _cache_dir / "tencent_code_cache.json"
+
+    @staticmethod
+    def _is_cache_valid(now_ts: float, cache_ts: float) -> bool:
+        if not cache_ts:
+            return False
+        now_dt = datetime.fromtimestamp(now_ts)
+        cache_dt = datetime.fromtimestamp(cache_ts)
+        open_dt = now_dt.replace(
+            hour=TencentUtils._market_open_hour,
+            minute=TencentUtils._market_open_minute,
+            second=0,
+            microsecond=0,
+        )
+        # Before market open: keep existing cache (no forced refresh)
+        if now_dt < open_dt:
+            return True
+        # After market open: refresh once per day (cache must be from today after open)
+        return cache_dt >= open_dt
+
+    @staticmethod
+    def _load_code_cache(now_ts: float) -> List[str]:
+        try:
+            if TencentUtils._cache_file.exists():
+                with open(TencentUtils._cache_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                ts = data.get("ts")
+                codes = data.get("codes")
+                if isinstance(ts, (int, float)) and isinstance(codes, list):
+                    if TencentUtils._is_cache_valid(now_ts, ts):
+                        TencentUtils._code_cache = codes
+                        TencentUtils._code_cache_time = ts
+                        logger.info(f"Loaded {len(codes)} codes from disk cache.")
+                        return codes
+        except Exception as e:
+            logger.warning(f"Failed to load code cache from disk: {e}")
+        return []
+
+    @staticmethod
+    def _save_code_cache(codes: List[str], ts: float) -> None:
+        try:
+            TencentUtils._cache_dir.mkdir(parents=True, exist_ok=True)
+            tmp_path = TencentUtils._cache_file.with_suffix(".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump({"ts": ts, "codes": codes}, f)
+            tmp_path.replace(TencentUtils._cache_file)
+        except Exception as e:
+            logger.warning(f"Failed to save code cache to disk: {e}")
 
     @staticmethod
     def get_stock_zh_a_spot_tencent() -> pd.DataFrame:
@@ -36,8 +89,12 @@ class TencentUtils:
         Uses internal cache or fetches from Eastmoney/Sina.
         """
         now = time.time()
-        if TencentUtils._code_cache and (now - TencentUtils._code_cache_time < TencentUtils._cache_duration):
+        if TencentUtils._code_cache and TencentUtils._is_cache_valid(now, TencentUtils._code_cache_time):
             return TencentUtils._code_cache
+        # Disk cache for restart resilience
+        disk_codes = TencentUtils._load_code_cache(now)
+        if disk_codes:
+            return disk_codes
 
         logger.info("Refresing stock code list from Eastmoney (stable source)...")
         # Try Eastmoney first
@@ -53,6 +110,7 @@ class TencentUtils:
             valid_codes = [c for c in codes if len(c) == 8 and (c.startswith('sh') or c.startswith('sz') or c.startswith('bj'))]
             TencentUtils._code_cache = valid_codes
             TencentUtils._code_cache_time = now
+            TencentUtils._save_code_cache(valid_codes, now)
             logger.info(f"Refreshed {len(valid_codes)} codes.")
             return valid_codes
         return []
@@ -62,19 +120,12 @@ class TencentUtils:
         """
         Fetch all codes using AkShare Eastmoney interface.
         Stable but takes ~60s due to large data. cache handles it.
-        Includes retry mechanism for robustness.
+        No retries: if the first attempt fails, fall back to Sina immediately.
         """
-        import random
-        retries = 3
-        
+        retries = 1
+
         for i in range(retries):
             try:
-                # Add random delay before request to avoid potential rate limiting if retrying
-                if i > 0:
-                     sleep_time = random.uniform(2, 5)
-                     logger.info(f"Retrying Eastmoney fetch in {sleep_time:.1f}s (Attempt {i+1}/{retries})...")
-                     time.sleep(sleep_time)
-
                 # timeout set to density of network
                 # Since akshare doesn't allow passing timeout to this func easily (unless we wrap it),
                 # we rely on its internal requests or just blocking.
@@ -290,4 +341,3 @@ class TencentUtils:
 
         df = pd.DataFrame(data_list)
         return df
-
