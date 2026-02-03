@@ -15,9 +15,9 @@ from functools import lru_cache
 from datetime import datetime, timedelta
 import hashlib
 import pickle
-from config.config import cfg
+from config.config import cfg, WORKSPACE_ROOT
 
-DEFAULT_TUSHARE_CACHE_DIR = Path(__file__).parent / "tushare_cache"
+DEFAULT_TUSHARE_CACHE_DIR = WORKSPACE_ROOT / "agents_workspace" / "tushare_cache"
 
 class CachedTusharePro:
     def __init__(self, cache_dir=None):

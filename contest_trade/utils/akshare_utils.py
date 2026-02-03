@@ -11,13 +11,13 @@ import concurrent.futures
 from akshare.utils import demjson
 from pathlib import Path
 from datetime import datetime
-from config.config import cfg
+from config.config import cfg, WORKSPACE_ROOT
 
 import akshare as ak
 from loguru import logger
 from .tencent_utils import TencentUtils
 
-DEFAULT_AKSHARE_CACHE_DIR = Path(__file__).parent / "akshare_cache"
+DEFAULT_AKSHARE_CACHE_DIR = WORKSPACE_ROOT / "agents_workspace" / "akshare_cache"
 
 def execute_with_timeout(func, args=(), kwargs={}, timeout=10):
     """

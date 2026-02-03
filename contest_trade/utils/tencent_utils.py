@@ -17,7 +17,7 @@ class TencentUtils:
     _code_cache_time = 0
     _market_open_hour = 9
     _market_open_minute = 30
-    _cache_dir = Path(__file__).parent / "cache"
+    _cache_dir = Path(__file__).parent.parent.parent / "agents_workspace" / "tencent_cache"
     _cache_file = _cache_dir / "tencent_code_cache.json"
 
     @staticmethod

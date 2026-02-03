@@ -16,9 +16,9 @@ import hashlib
 import pickle
 import time
 from typing import List
-from config.config import cfg
+from config.config import cfg, WORKSPACE_ROOT
 
-DEFAULT_FMP_CACHE_DIR = Path(__file__).parent / "fmp_cache"
+DEFAULT_FMP_CACHE_DIR = WORKSPACE_ROOT / "agents_workspace" / "fmp_cache"
 
 class CachedFMPClient:
     def __init__(self, cache_dir=None, api_key=None):

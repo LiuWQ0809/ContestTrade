@@ -1,0 +1,630 @@
+{
+    "cash": 6199.9299999999985,
+    "holdings": {
+        "600406": {
+            "name": "国电南瑞",
+            "quantity": 300,
+            "buy_price": 25.73,
+            "buy_time": "2026-02-02 10:30:00",
+            "current_price": 25.95,
+            "max_price": 25.95,
+            "buy_fee": 5.08
+        },
+        "600489": {
+            "name": "600489",
+            "quantity": 200,
+            "buy_price": 33.75,
+            "buy_time": "2026-02-03 06:44:46",
+            "current_price": 32.99,
+            "max_price": 33.31
+        }
+    },
+    "history": [
+        {
+            "type": "BUY_MANUAL",
+            "symbol": "002475",
+            "price": 51.896,
+            "quantity": 200,
+            "time": "2026-01-30 12:53:02",
+            "notes": "Manual position add"
+        },
+        {
+            "type": "BUY_MANUAL",
+            "symbol": "000547",
+            "price": 27.157,
+            "quantity": 300,
+            "time": "2026-01-30 12:54:25",
+            "notes": "Manual position add"
+        },
+        {
+            "type": "SELL",
+            "symbol": "000547",
+            "name": "航天发展",
+            "buy_price": 27.157,
+            "sell_price": 27.7,
+            "quantity": 300,
+            "buy_fee": 0.0,
+            "sell_fee": 9.24,
+            "time": "2026-02-02 09:40:00",
+            "pnl": 153.66,
+            "pnl_rate": "1.89%",
+            "reason": "AI Signal"
+        },
+        {
+            "type": "SELL_MANUAL",
+            "symbol": "002475",
+            "price": 52.7,
+            "quantity": 200,
+            "time": "2026-02-02 01:57:10",
+            "notes": "Manual position sell"
+        },
+        {
+            "type": "BUY",
+            "symbol": "002353",
+            "price": 91.15,
+            "quantity": 100,
+            "fee": 5.09,
+            "time": "2026-02-02 10:20:00"
+        },
+        {
+            "type": "BUY",
+            "symbol": "600406",
+            "price": 25.73,
+            "quantity": 300,
+            "fee": 5.08,
+            "time": "2026-02-02 10:30:00"
+        },
+        {
+            "type": "SELL_MANUAL",
+            "symbol": "002353",
+            "price": 95.0,
+            "quantity": 100,
+            "time": "2026-02-03 02:09:24",
+            "notes": "Manual position sell"
+        },
+        {
+            "type": "BUY",
+            "symbol": "601212",
+            "price": 11.07,
+            "quantity": 900,
+            "fee": 5.1,
+            "time": "2026-02-03 10:05:00"
+        },
+        {
+            "type": "SELL_MANUAL",
+            "symbol": "601212",
+            "price": 11.07,
+            "quantity": 900,
+            "time": "2026-02-03 02:34:42",
+            "notes": "Manual position sell"
+        },
+        {
+            "type": "BUY",
+            "symbol": "600547",
+            "price": 45.79,
+            "quantity": 200,
+            "fee": 5.09,
+            "time": "2026-02-03 10:35:00"
+        },
+        {
+            "type": "SELL_MANUAL",
+            "symbol": "600547",
+            "price": 45.79,
+            "quantity": 200,
+            "time": "2026-02-03 06:28:29",
+            "notes": "Manual position sell"
+        },
+        {
+            "type": "BUY",
+            "symbol": "600489",
+            "price": 33.75,
+            "quantity": 200,
+            "fee": 5.07,
+            "time": "2026-02-03 14:25:00"
+        },
+        {
+            "type": "SELL_MANUAL",
+            "symbol": "600489",
+            "price": 33.75,
+            "quantity": 200,
+            "time": "2026-02-03 06:37:25",
+            "notes": "Manual position sell"
+        },
+        {
+            "type": "BUY",
+            "symbol": "600547",
+            "price": 48.92,
+            "quantity": 200,
+            "fee": 5.1,
+            "time": "2026-02-03 14:35:00"
+        },
+        {
+            "type": "SELL_MANUAL",
+            "symbol": "600547",
+            "price": 48.92,
+            "quantity": 200,
+            "time": "2026-02-03 06:43:32",
+            "notes": "Manual position sell"
+        },
+        {
+            "type": "BUY_MANUAL",
+            "symbol": "600489",
+            "price": 33.75,
+            "quantity": 200,
+            "time": "2026-02-03 06:44:46",
+            "notes": "Manual position add"
+        }
+    ],
+    "daily_stats": [
+        {
+            "date": "2026-02-02",
+            "total_value": 20274.09,
+            "total_pnl": 274.09,
+            "total_fees": 9.24,
+            "day_return": "0.00%",
+            "holdings": [
+                {
+                    "symbol": "002475",
+                    "current_price": 52.55,
+                    "max_price": 52.55,
+                    "net_pnl": 120.43,
+                    "net_pnl_rate": "1.16%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-02",
+            "total_value": 20299.72,
+            "total_pnl": 299.72,
+            "total_fees": 14.33,
+            "day_return": "0.13%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 91.15,
+                    "max_price": 91.15,
+                    "net_pnl": -14.74,
+                    "net_pnl_rate": "-0.16%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-02",
+            "total_value": 20348.67,
+            "total_pnl": 348.67,
+            "total_fees": 19.41,
+            "day_return": "0.24%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 91.78,
+                    "max_price": 91.78,
+                    "net_pnl": 48.23,
+                    "net_pnl_rate": "0.53%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.73,
+                    "max_price": 25.73,
+                    "net_pnl": -14.02,
+                    "net_pnl_rate": "-0.18%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-02",
+            "total_value": 20281.7,
+            "total_pnl": 281.7,
+            "total_fees": 19.41,
+            "day_return": "-0.33%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 91.53,
+                    "max_price": 91.78,
+                    "net_pnl": 23.24,
+                    "net_pnl_rate": "0.25%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.59,
+                    "max_price": 25.73,
+                    "net_pnl": -56.0,
+                    "net_pnl_rate": "-0.73%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-02",
+            "total_value": 20264.71,
+            "total_pnl": 264.71,
+            "total_fees": 19.41,
+            "day_return": "-0.08%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 91.3,
+                    "max_price": 91.78,
+                    "net_pnl": 0.25,
+                    "net_pnl_rate": "0.00%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.61,
+                    "max_price": 25.73,
+                    "net_pnl": -50.0,
+                    "net_pnl_rate": "-0.65%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-02",
+            "total_value": 20156.76,
+            "total_pnl": 156.76,
+            "total_fees": 19.41,
+            "day_return": "-0.53%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 90.1,
+                    "max_price": 91.78,
+                    "net_pnl": -119.69,
+                    "net_pnl_rate": "-1.31%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.65,
+                    "max_price": 25.73,
+                    "net_pnl": -38.01,
+                    "net_pnl_rate": "-0.49%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-02",
+            "total_value": 20090.8,
+            "total_pnl": 90.8,
+            "total_fees": 19.41,
+            "day_return": "-0.33%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 90.01,
+                    "max_price": 91.78,
+                    "net_pnl": -128.68,
+                    "net_pnl_rate": "-1.41%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.46,
+                    "max_price": 25.73,
+                    "net_pnl": -94.98,
+                    "net_pnl_rate": "-1.23%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-02",
+            "total_value": 20166.76,
+            "total_pnl": 166.76,
+            "total_fees": 19.41,
+            "day_return": "0.38%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 90.02,
+                    "max_price": 91.78,
+                    "net_pnl": -127.68,
+                    "net_pnl_rate": "-1.40%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.71,
+                    "max_price": 25.73,
+                    "net_pnl": -20.02,
+                    "net_pnl_rate": "-0.26%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-02",
+            "total_value": 19983.85,
+            "total_pnl": -16.15,
+            "total_fees": 19.41,
+            "day_return": "-0.91%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 88.61,
+                    "max_price": 91.78,
+                    "net_pnl": -268.61,
+                    "net_pnl_rate": "-2.95%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.57,
+                    "max_price": 25.73,
+                    "net_pnl": -62.0,
+                    "net_pnl_rate": "-0.80%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-02",
+            "total_value": 19929.88,
+            "total_pnl": -70.12,
+            "total_fees": 19.41,
+            "day_return": "-0.27%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 88.43,
+                    "max_price": 91.78,
+                    "net_pnl": -286.6,
+                    "net_pnl_rate": "-3.14%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.45,
+                    "max_price": 25.73,
+                    "net_pnl": -97.98,
+                    "net_pnl_rate": "-1.27%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20330.68,
+            "total_pnl": 330.68,
+            "total_fees": 19.41,
+            "day_return": "2.01%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 92.59,
+                    "max_price": 92.59,
+                    "net_pnl": 129.19,
+                    "net_pnl_rate": "1.42%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.4,
+                    "max_price": 25.73,
+                    "net_pnl": -112.97,
+                    "net_pnl_rate": "-1.46%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20484.6,
+            "total_pnl": 484.6,
+            "total_fees": 19.41,
+            "day_return": "0.76%",
+            "holdings": [
+                {
+                    "symbol": "002353",
+                    "current_price": 93.38,
+                    "max_price": 93.38,
+                    "net_pnl": 208.15,
+                    "net_pnl_rate": "2.28%"
+                },
+                {
+                    "symbol": "600406",
+                    "current_price": 25.65,
+                    "max_price": 25.73,
+                    "net_pnl": -38.01,
+                    "net_pnl_rate": "-0.49%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20659.17,
+            "total_pnl": 659.17,
+            "total_fees": 24.51,
+            "day_return": "0.85%",
+            "holdings": [
+                {
+                    "symbol": "600406",
+                    "current_price": 25.71,
+                    "max_price": 25.73,
+                    "net_pnl": -20.02,
+                    "net_pnl_rate": "-0.26%"
+                },
+                {
+                    "symbol": "601212",
+                    "current_price": 11.07,
+                    "max_price": 11.07,
+                    "net_pnl": -15.18,
+                    "net_pnl_rate": "-0.15%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20618.51,
+            "total_pnl": 618.51,
+            "total_fees": 29.6,
+            "day_return": "-0.20%",
+            "holdings": [
+                {
+                    "symbol": "600406",
+                    "current_price": 25.59,
+                    "max_price": 25.73,
+                    "net_pnl": -56.0,
+                    "net_pnl_rate": "-0.73%"
+                },
+                {
+                    "symbol": "600547",
+                    "current_price": 45.79,
+                    "max_price": 45.79,
+                    "net_pnl": -14.76,
+                    "net_pnl_rate": "-0.16%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20546.54,
+            "total_pnl": 546.54,
+            "total_fees": 29.6,
+            "day_return": "-0.35%",
+            "holdings": [
+                {
+                    "symbol": "600406",
+                    "current_price": 25.57,
+                    "max_price": 25.73,
+                    "net_pnl": -62.0,
+                    "net_pnl_rate": "-0.80%"
+                },
+                {
+                    "symbol": "600547",
+                    "current_price": 45.46,
+                    "max_price": 45.79,
+                    "net_pnl": -80.73,
+                    "net_pnl_rate": "-0.88%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20638.5,
+            "total_pnl": 638.5,
+            "total_fees": 29.6,
+            "day_return": "0.45%",
+            "holdings": [
+                {
+                    "symbol": "600406",
+                    "current_price": 25.65,
+                    "max_price": 25.73,
+                    "net_pnl": -38.01,
+                    "net_pnl_rate": "-0.49%"
+                },
+                {
+                    "symbol": "600547",
+                    "current_price": 45.8,
+                    "max_price": 45.8,
+                    "net_pnl": -12.76,
+                    "net_pnl_rate": "-0.14%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20696.47,
+            "total_pnl": 696.47,
+            "total_fees": 29.6,
+            "day_return": "0.28%",
+            "holdings": [
+                {
+                    "symbol": "600406",
+                    "current_price": 25.67,
+                    "max_price": 25.73,
+                    "net_pnl": -32.01,
+                    "net_pnl_rate": "-0.41%"
+                },
+                {
+                    "symbol": "600547",
+                    "current_price": 46.06,
+                    "max_price": 46.06,
+                    "net_pnl": 39.21,
+                    "net_pnl_rate": "0.43%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20692.62,
+            "total_pnl": 692.62,
+            "total_fees": 34.67,
+            "day_return": "-0.02%",
+            "holdings": [
+                {
+                    "symbol": "600406",
+                    "current_price": 25.85,
+                    "max_price": 25.85,
+                    "net_pnl": 21.96,
+                    "net_pnl_rate": "0.28%"
+                },
+                {
+                    "symbol": "600489",
+                    "current_price": 33.75,
+                    "max_price": 33.75,
+                    "net_pnl": -13.52,
+                    "net_pnl_rate": "-0.20%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20706.97,
+            "total_pnl": 706.97,
+            "total_fees": 39.77,
+            "day_return": "0.07%",
+            "holdings": [
+                {
+                    "symbol": "600406",
+                    "current_price": 25.92,
+                    "max_price": 25.92,
+                    "net_pnl": 42.95,
+                    "net_pnl_rate": "0.56%"
+                },
+                {
+                    "symbol": "600547",
+                    "current_price": 48.92,
+                    "max_price": 48.92,
+                    "net_pnl": -15.09,
+                    "net_pnl_rate": "-0.15%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20620.56,
+            "total_pnl": 620.56,
+            "total_fees": 39.77,
+            "day_return": "-0.42%",
+            "holdings": [
+                {
+                    "symbol": "600406",
+                    "current_price": 25.92,
+                    "max_price": 25.92,
+                    "net_pnl": 42.95,
+                    "net_pnl_rate": "0.56%"
+                },
+                {
+                    "symbol": "600489",
+                    "current_price": 33.31,
+                    "max_price": 33.31,
+                    "net_pnl": -96.4,
+                    "net_pnl_rate": "-1.43%"
+                }
+            ]
+        },
+        {
+            "date": "2026-02-03",
+            "total_value": 20565.59,
+            "total_pnl": 565.59,
+            "total_fees": 39.77,
+            "day_return": "-0.27%",
+            "holdings": [
+                {
+                    "symbol": "600406",
+                    "current_price": 25.95,
+                    "max_price": 25.95,
+                    "net_pnl": 51.95,
+                    "net_pnl_rate": "0.67%"
+                },
+                {
+                    "symbol": "600489",
+                    "current_price": 32.99,
+                    "max_price": 33.31,
+                    "net_pnl": -160.37,
+                    "net_pnl_rate": "-2.38%"
+                }
+            ]
+        }
+    ],
+    "total_fees": 39.77
+}

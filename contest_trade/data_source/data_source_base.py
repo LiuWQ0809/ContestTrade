@@ -1,12 +1,12 @@
 import pandas as pd
-from config.config import PROJECT_ROOT
+from config.config import PROJECT_ROOT, WORKSPACE_ROOT
 from pathlib import Path
 
 class DataSourceBase:
     
     def __init__(self, name: str):
         self.name = name
-        self.data_cache_dir = Path(PROJECT_ROOT) / "data_source" / "data_cache" / self.name
+        self.data_cache_dir = WORKSPACE_ROOT / "agents_workspace" / "data_source_cache" / self.name
         if not self.data_cache_dir.exists():
             self.data_cache_dir.mkdir(parents=True, exist_ok=True)
 
