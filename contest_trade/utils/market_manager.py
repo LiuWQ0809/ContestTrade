@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from utils.tushare_utils import pro_cached
 from utils.fmp_utils import get_us_stock_price, fmp_cached
 from config.config import cfg
+import akshare as ak
 
 class Market(Enum):
     """市场枚举"""
@@ -834,13 +835,27 @@ class MarketManager:
             # 优先使用缓存，fallback到tushare
             stock_df = self._get_stock_basic_cache()
             if stock_df is None:
-                stock_df = pro_cached.run(
-                    func_name="stock_basic",
-                    func_kwargs={
-                        "exchange": "",
-                        "fields": 'ts_code,symbol,name,area,industry,list_date,list_status,fullname'
-                    }
-                )
+                # 尝试从 AkShare 获取
+                stock_df = self._get_stock_basic_from_akshare()
+                
+            if stock_df is None:
+                # 最后尝试 Tushare
+                try:
+                    stock_df = pro_cached.run(
+                        func_name="stock_basic",
+                        func_kwargs={
+                            "exchange": "",
+                            "fields": 'ts_code,symbol,name,area,industry,list_date,list_status,fullname'
+                        }
+                    )
+                except Exception as e:
+                    print(f"Tushare 获取失败: {e}")
+                    stock_df = None
+
+            if stock_df is None:
+                print("错误：无法获取股票列表 (Cache/AkShare/Tushare 全部失败)")
+                return {}, {}
+
             stock_name2code = {}
             stock_code2name = {}
             stock_info_columns = stock_df.columns.tolist()
@@ -859,6 +874,35 @@ class MarketManager:
                 stock_name2code[name] = code
 
         return stock_name2code, stock_code2name
+
+    def _get_stock_basic_from_akshare(self):
+        """从 AkShare 获取股票列表并转换为 Tushare 格式"""
+        print("尝试从 AkShare 获取股票列表...")
+        try:
+            # 使用实时行情接口获取列表，包含代码和名称
+            df = ak.stock_zh_a_spot_em()
+            # df columns: 序号, 代码, 名称, 最新价, ...
+            
+            # 构造 ts_code
+            def get_ts_code(code):
+                code = str(code)
+                if code.startswith('6'):
+                    return f"{code}.SH"
+                elif code.startswith('0') or code.startswith('3'):
+                    return f"{code}.SZ"
+                elif code.startswith('4') or code.startswith('8'):
+                    return f"{code}.BJ"
+                else:
+                    return f"{code}.SZ" # Default fallback
+            
+            df['ts_code'] = df['代码'].apply(get_ts_code)
+            df['name'] = df['名称']
+            
+            # 返回包含所需列的 DataFrame
+            return df[['ts_code', 'name']]
+        except Exception as e:
+            print(f"从 AkShare 获取股票列表失败: {e}")
+            return None
 
     def _get_stock_basic_cache(self):
         """获取股票基本信息缓存，优先使用离线缓存"""
