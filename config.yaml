@@ -62,7 +62,7 @@ llm:
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   #YOUR_DASHSCOPE_API_KEY
   api_key: "sk-17dc875220c84b638dca836f67556efb"
-  model_name: "deepseek-v3.2"
+  model_name: "qwen3-max-2026-01-23"
   timeout: 90
 
 llm_thinking:
@@ -70,7 +70,7 @@ llm_thinking:
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   #YOUR_DASHSCOPE_API_KEY
   api_key: "sk-17dc875220c84b638dca836f67556efb"
-  model_name: "qwen3-max"
+  model_name: "qwen3-max-2026-01-23"
   # 官方思考模式切换 / Enable Qwen thinking mode
   enable_thinking: True 
   timeout: 180 

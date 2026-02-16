@@ -160,6 +160,45 @@ class AutoTrader:
             logger.error(f"Error getting price for {symbol_or_name}: {e}")
         return None, None, None, None, 0
 
+    def _parse_probability(self, score) -> float:
+        """将 AI 置信度统一解析为 0~100 的浮点数"""
+        try:
+            if isinstance(score, (int, float)):
+                p = float(score)
+            elif isinstance(score, str):
+                p = float(score.replace('%', '').strip())
+            else:
+                p = 60.0
+        except Exception:
+            p = 60.0
+        return max(0.0, min(100.0, p))
+
+    def _calc_dynamic_buy_amount(self, score, total_value: float, cash: float, turnover_remaining: float) -> float:
+        """
+        动态计算单笔买入金额：
+        - 由 AI 置信度决定目标仓位比例
+        - 同时受可用现金和当日剩余换手额度约束
+        """
+        prob = self._parse_probability(score)
+
+        # AI 置信度 -> 目标买入比例（占总资产）
+        if prob >= 85:
+            target_ratio = 0.35
+        elif prob >= 75:
+            target_ratio = 0.25
+        elif prob >= 65:
+            target_ratio = 0.18
+        elif prob >= 55:
+            target_ratio = 0.12
+        else:
+            target_ratio = 0.08
+
+        target_amount = total_value * target_ratio
+        cash_budget = max(0.0, cash * 0.98)  # 预留少量现金给费用与波动
+        turnover_budget = max(0.0, turnover_remaining)
+
+        return max(0.0, min(target_amount, cash_budget, turnover_budget))
+
     def display_portfolio(self):
         """使用 Rich 打印专业的持仓报告，包含今日已卖出"""
         
@@ -450,13 +489,8 @@ class AutoTrader:
                 if price:
                     current_prices[code] = price
                     if action == 'buy':
-                        # 换手率检查
-                        estimated_trade_value = 10000 
-                        if current_turnover + estimated_trade_value > turnover_limit:
-                            status = "[yellow]跳过 (超出换手率限制)[/yellow]"
-                        
                         # 临时限制：账户权限不足，跳过创业板(300)和科创板(688)买入
-                        elif code.startswith('300') or code.startswith('688'):
+                        if code.startswith('300') or code.startswith('688'):
                             status = "[dim]跳过 (无权限:创业板/科创板)[/dim]"
                             
                         # 涨停板规则: 涨幅超过 9.9% 且非创业板/科创板，通常很难买入
@@ -465,18 +499,39 @@ class AutoTrader:
                         elif pct_chg > 19.9: # 创业板/科创板涨停
                              status = "[dim]跳过 (涨停无法买入)[/dim]"
                         else:
-                            if self.portfolio.buy(code, price, trigger_time, name=name):
-                                status = "[green]✅ 已买入[/green]"
-                                current_turnover += estimated_trade_value
-                                # 获取成交后的持仓信息以显示数量
-                                holding = self.portfolio.data["holdings"].get(code, {})
-                                quantity = holding.get("quantity", 0)
-                                # 交易成功后发送通知
-                                logger.info(f"发送微信买入通知: {name}({code})")
-                                await send_pushplus_msg(f"✅ Contest 买入成交: {name}({code})", 
-                                                     f"时间: {trigger_time}<br>价格: {price}<br>数量: {quantity}<br>确定性: {score}%<br>原因: {signal.get('reason', 'AI Signal')}")
+                            # 动态买入金额：由 AI 置信度 + 资金 + 换手额度共同决定
+                            available_cash_now = self.portfolio.data.get("cash", 0.0)
+                            turnover_remaining = turnover_limit - current_turnover
+
+                            if turnover_remaining <= 0:
+                                status = "[yellow]跳过 (超出换手率限制)[/yellow]"
                             else:
-                                status = "[dim]跳过 (已持仓或资金不足)[/dim]"
+                                dynamic_amount = self._calc_dynamic_buy_amount(
+                                    score=score,
+                                    total_value=total_value,
+                                    cash=available_cash_now,
+                                    turnover_remaining=turnover_remaining,
+                                )
+
+                                estimated_quantity = (int(dynamic_amount / price) // 100) * 100
+                                estimated_trade_value = estimated_quantity * price
+
+                                if estimated_quantity < 100:
+                                    status = "[dim]跳过 (资金/换手不足1手)[/dim]"
+                                elif current_turnover + estimated_trade_value > turnover_limit:
+                                    status = "[yellow]跳过 (超出换手率限制)[/yellow]"
+                                elif self.portfolio.buy(code, price, trigger_time, name=name, amount=estimated_trade_value):
+                                    status = "[green]✅ 已买入[/green]"
+                                    current_turnover += estimated_trade_value
+                                    # 获取成交后的持仓信息以显示数量
+                                    holding = self.portfolio.data["holdings"].get(code, {})
+                                    quantity = holding.get("quantity", 0)
+                                    # 交易成功后发送通知
+                                    logger.info(f"发送微信买入通知: {name}({code})")
+                                    await send_pushplus_msg(f"✅ Contest 买入成交: {name}({code})", 
+                                                         f"时间: {trigger_time}<br>价格: {price}<br>数量: {quantity}<br>确定性: {score}%<br>原因: {signal.get('reason', 'AI Signal')}")
+                                else:
+                                    status = "[dim]跳过 (已持仓或资金不足)[/dim]"
                     elif action == 'sell':
                         # 跌停板规则
                         if pct_chg < -9.9 and not (code.startswith('300') or code.startswith('688')):

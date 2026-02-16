@@ -287,7 +287,6 @@ class ResearchAgent:
         elif isinstance(display_res, (list, dict)):
              res_str = json.dumps(display_res, ensure_ascii=False)
              if len(res_str) > max_res_len:
-                 display_res = json.loads(res_str[:max_res_len] + '"}') if res_str.startswith('{') else []
                  display_res = f"{res_str[:max_res_len]}... (JSON数据过长已截断)"
 
         state["tool_call_context"] += json.dumps({"tool_called":selected_tool,\
